@@ -21,16 +21,18 @@ public class LessonService {
     private final ConnectionRequestRepository connections;
     private final LessonSeriesRepository seriesRepository;
     private final AttachmentRepository attachments;
+    private final WhiteboardService whiteboards;
     private final Path storageRoot;
     private final ZoneId zone;
     private final Clock clock;
     public LessonService(LessonRepository lessons, UserRepository users, ConnectionRequestRepository connections,
-                         LessonSeriesRepository seriesRepository, AttachmentRepository attachments,
+                         LessonSeriesRepository seriesRepository, AttachmentRepository attachments, WhiteboardService whiteboards,
                          @org.springframework.beans.factory.annotation.Value("${app.timezone}") String timezone,
                          @org.springframework.beans.factory.annotation.Value("${app.storage-path}") String storagePath,
                          Clock clock) {
         this.lessons = lessons; this.users = users; this.connections = connections; this.seriesRepository = seriesRepository;
-        this.attachments = attachments; this.storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
+        this.attachments = attachments; this.whiteboards = whiteboards;
+        this.storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
         this.zone = ZoneId.of(timezone); this.clock = clock;
     }
 
@@ -161,6 +163,7 @@ public class LessonService {
         if (!generated.isEmpty()) lessons.saveAll(generated);
     }
     private void deleteLessons(List<Lesson> lessonsToDelete) {
+        List<String> boardImages = whiteboards.storedImagesForLessons(lessonsToDelete);
         List<Attachment> attachmentsToDelete = new ArrayList<>();
         for (Lesson item : lessonsToDelete) {
             List<Attachment> lessonAttachments = attachments.findByLessonOrderByCreatedAtAsc(item);
@@ -177,6 +180,7 @@ public class LessonService {
             attachments.flush();
         }
         lessons.deleteAll(lessonsToDelete);
+        whiteboards.deleteStoredImages(boardImages);
     }
     private void requireRecurring(Lesson lesson) {
         if (!lesson.isRecurring()) throw new IllegalArgumentException("Это занятие не входит в еженедельную серию");

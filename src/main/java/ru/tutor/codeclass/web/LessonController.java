@@ -14,13 +14,16 @@ public class LessonController {
     private final AccountService accounts;
     private final LessonService lessons;
     private final AttachmentService attachments;
-    public LessonController(AccountService accounts, LessonService lessons, AttachmentService attachments) {
-        this.accounts = accounts; this.lessons = lessons; this.attachments = attachments;
+    private final WhiteboardService whiteboards;
+    public LessonController(AccountService accounts, LessonService lessons, AttachmentService attachments,
+                            WhiteboardService whiteboards) {
+        this.accounts = accounts; this.lessons = lessons; this.attachments = attachments; this.whiteboards = whiteboards;
     }
     @GetMapping("/lessons/{id}")
     String details(Authentication auth, @PathVariable Long id, Model model) {
         User user = accounts.requireByUsername(auth.getName());
         Lesson lesson = lessons.requireAccessible(user, id);
+        Whiteboard board = whiteboards.getOrCreate(user, lesson);
         var all = attachments.list(lesson);
         LessonMaterialsForm materials = new LessonMaterialsForm();
         materials.setHomeworkText(lesson.getHomeworkText()); materials.setLessonNotesText(lesson.getLessonNotesText());
@@ -29,6 +32,7 @@ public class LessonController {
         schedule.setDurationMinutes(lesson.getDurationMinutes());
         model.addAttribute("user", user);
         model.addAttribute("lesson", lesson);
+        model.addAttribute("board", board);
         model.addAttribute("past", lessons.isPast(lesson));
         model.addAttribute("materialsForm", materials);
         model.addAttribute("lessonForm", schedule);

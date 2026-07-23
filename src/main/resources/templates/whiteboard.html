@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="theme-color" content="#080b13">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <title th:text="'Доска занятия — CodeClass'">Доска занятия — CodeClass</title>
+    <link rel="stylesheet" th:href="@{/css/whiteboard.css}">
+</head>
+<body>
+<main id="whiteboard-app"
+      class="whiteboard-app is-offline"
+      th:data-board-id="${board.publicId}"
+      th:data-lesson-id="${lesson.id}"
+      th:data-user-role="${user.role.name()}"
+      th:data-user-name="${user.displayName}">
+    <header class="board-topbar">
+        <a class="board-brand" th:href="@{/lessons/{id}(id=${lesson.id})}" aria-label="Вернуться к занятию">
+            <span>&gt;_</span>
+            <b>CodeClass</b>
+        </a>
+        <div class="board-title">
+            <strong>Доска занятия</strong>
+            <span th:text="${lesson.student.displayName}">Ученик</span>
+        </div>
+        <div class="board-presence">
+            <span id="connection-dot" class="connection-dot"></span>
+            <span id="connection-label">Подключение…</span>
+            <span id="participant-count" class="participant-count">1</span>
+        </div>
+        <button id="copy-link" class="topbar-button" type="button" title="Скопировать ссылку">Скопировать ссылку</button>
+        <a class="topbar-button back-button" th:href="@{/lessons/{id}(id=${lesson.id})}">К занятию</a>
+    </header>
+
+    <aside class="board-toolbar" aria-label="Инструменты доски">
+        <div class="tool-group">
+            <button class="tool-button active" type="button" data-tool="pencil" title="Карандаш (P)">
+                <span class="tool-icon">✎</span><span class="tool-label">Карандаш</span>
+            </button>
+            <button class="tool-button" type="button" data-tool="eraser" title="Объектный ластик (E)">
+                <span class="tool-icon">⌫</span><span class="tool-label">Ластик</span>
+            </button>
+            <button class="tool-button" type="button" data-tool="select" title="Выбор фотографии (V)">
+                <span class="tool-icon">↖</span><span class="tool-label">Выбор</span>
+            </button>
+            <button class="tool-button" type="button" data-tool="hand" title="Перемещение (H)">
+                <span class="tool-icon">✋</span><span class="tool-label">Рука</span>
+            </button>
+        </div>
+
+        <div class="tool-divider"></div>
+        <label class="size-control" title="Толщина карандаша">
+            <span>Толщина</span>
+            <input id="brush-size" type="range" min="1" max="40" value="4">
+            <output id="brush-size-value">4 px</output>
+        </label>
+        <div class="color-control" aria-label="Цвет карандаша">
+            <button class="color-swatch active" type="button" data-color="#64F5A6" style="--swatch:#64F5A6" title="Зелёный"></button>
+            <button class="color-swatch" type="button" data-color="#45D8FF" style="--swatch:#45D8FF" title="Голубой"></button>
+            <button class="color-swatch" type="button" data-color="#FFFFFF" style="--swatch:#FFFFFF" title="Белый"></button>
+            <button class="color-swatch" type="button" data-color="#FFD66B" style="--swatch:#FFD66B" title="Жёлтый"></button>
+            <button class="color-swatch" type="button" data-color="#FF6B7A" style="--swatch:#FF6B7A" title="Красный"></button>
+            <label class="custom-color" title="Произвольный цвет">
+                <input id="brush-color" type="color" value="#64f5a6">
+                <span>+</span>
+            </label>
+        </div>
+
+        <div class="tool-divider"></div>
+        <label class="tool-button upload-button" title="Загрузить JPEG или PNG">
+            <span class="tool-icon">▧</span><span class="tool-label">Фото</span>
+            <input id="image-upload" type="file" accept="image/jpeg,image/png">
+        </label>
+        <button id="clear-board" th:if="${user.role.name() == 'TEACHER'}"
+                class="tool-button danger" type="button" title="Полностью очистить доску">
+            <span class="tool-icon">×</span><span class="tool-label">Очистить</span>
+        </button>
+    </aside>
+
+    <section id="canvas-shell" class="canvas-shell" aria-label="Бесконечная доска">
+        <canvas id="board-canvas"></canvas>
+        <div id="remote-cursors" class="remote-cursors" aria-hidden="true"></div>
+        <div id="offline-shield" class="offline-shield">
+            <div><span class="spinner"></span><b>Переподключение</b><small>Изменения временно заблокированы</small></div>
+        </div>
+        <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+    </section>
+
+    <div class="zoom-controls" aria-label="Масштаб">
+        <button id="zoom-out" type="button" title="Уменьшить">−</button>
+        <button id="zoom-reset" type="button" title="Масштаб 100%"><span id="zoom-value">100%</span></button>
+        <button id="zoom-in" type="button" title="Увеличить">+</button>
+    </div>
+
+    <div class="board-hint">Space + перетаскивание — перемещение · колесо — масштаб</div>
+</main>
+<script th:src="@{/vendor/fabric-7.4.0.min.js}"></script>
+<script th:src="@{/js/whiteboard.js}"></script>
+</body>
+</html>

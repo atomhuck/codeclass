@@ -11,6 +11,35 @@
         <details th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" class="popover"><summary class="button secondary">Перенести</summary><form th:action="@{/teacher/lessons/{id}/reschedule(id=${lesson.id})}" th:object="${lessonForm}" method="post" class="panel popover-panel stack-form"><h3>Перенос занятия</h3><input type="hidden" th:field="*{studentId}"><input type="hidden" th:field="*{recurrence}"><label>Новая дата и время<input type="datetime-local" th:field="*{startAt}" required></label><label>Длительность<input type="number" min="15" max="300" step="15" th:field="*{durationMinutes}"></label><fieldset th:if="${lesson.recurring}" class="choice-fieldset"><legend>Применить изменение</legend><label class="choice-card"><input type="radio" th:field="*{scope}" value="SINGLE"><span><b>Только к этому</b><small>Остальные останутся как были</small></span></label><label class="choice-card"><input type="radio" th:field="*{scope}" value="FOLLOWING"><span><b>К этому и последующим</b><small>Вся будущая часть серии сдвинется</small></span></label></fieldset><button class="button primary">Перенести</button></form></details>
     </header>
 
+    <section class="panel board-card">
+        <div class="board-card-visual" aria-hidden="true">
+            <span class="board-grid-mark">&gt;_</span>
+            <i></i><i></i><i></i>
+        </div>
+        <div class="board-card-copy">
+            <p class="eyebrow">Совместная работа</p>
+            <h2>Доска занятия</h2>
+            <p>Рисуйте, разбирайте задачи и добавляйте изображения вместе в режиме реального времени.</p>
+        </div>
+        <div class="board-card-actions">
+            <a class="button primary" th:href="@{/lessons/{id}/board(id=${lesson.id})}">Открыть доску</a>
+            <button class="button secondary copy-board-link" type="button"
+                    th:data-board-url="@{/boards/{publicId}(publicId=${board.publicId})}">Скопировать ссылку</button>
+        </div>
+    </section>
+    <script>
+        document.querySelector(".copy-board-link")?.addEventListener("click", async event => {
+            const url = new URL(event.currentTarget.dataset.boardUrl, location.origin).href;
+            try {
+                await navigator.clipboard.writeText(url);
+                event.currentTarget.textContent = "Ссылка скопирована";
+                setTimeout(() => event.currentTarget.textContent = "Скопировать ссылку", 1800);
+            } catch {
+                window.prompt("Скопируйте ссылку на доску", url);
+            }
+        });
+    </script>
+
     <form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/materials(id=${lesson.id})}" th:object="${materialsForm}" method="post" class="lesson-sections">
         <section class="panel material-card"><div class="material-heading"><span class="material-icon green">✓</span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><label class="sr-only" for="homeworkText">Текст домашнего задания</label><textarea id="homeworkText" th:field="*{homeworkText}" rows="7" placeholder="Опишите задание, номера задач и полезные ссылки..."></textarea></section>
         <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan">#</span><div><p class="eyebrow">Разобрали на уроке</p><h2>Заметка о занятии</h2></div></div><label class="sr-only" for="lessonNotesText">Заметка о занятии</label><textarea id="lessonNotesText" th:field="*{lessonNotesText}" rows="7" placeholder="Темы, прогресс ученика и важные замечания..."></textarea></section>
