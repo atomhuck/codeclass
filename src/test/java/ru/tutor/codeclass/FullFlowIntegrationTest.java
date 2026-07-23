@@ -96,11 +96,11 @@ class FullFlowIntegrationTest {
         assertThatThrownBy(() -> attachments.store(teacher, lesson.getId(), AttachmentCategory.HOMEWORK, List.of(executable)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("запрещён");
 
-        lessons.cancel(teacher, lesson.getId());
-        assertThat(lessons.requireAccessible(student, lesson.getId()).getStatus()).isEqualTo(LessonStatus.CANCELLED);
+        lessons.delete(teacher, lesson.getId());
+        assertThat(lessonRepository.findById(lesson.getId())).isEmpty();
     }
 
-    @Test void weeklySeriesCanBeRescheduledAndCancelledFromSelectedLesson() throws Exception {
+    @Test void weeklySeriesCanBeRescheduledAndDeletedFromSelectedLesson() throws Exception {
         User teacher = accounts.requireByUsername("teacher");
         User student = accounts.registerStudent("Ученик серии", "weekly_student", "password123");
         connections.send(student, "teacher_code");
@@ -131,21 +131,23 @@ class FullFlowIntegrationTest {
         assertThat(occurrences.subList(1, occurrences.size()))
                 .allMatch(item -> item.getDurationMinutes() == 90);
 
-        lessons.cancel(teacher, occurrences.get(2).getId(), LessonChangeScope.FOLLOWING);
+        lessons.delete(teacher, occurrences.get(1).getId(), LessonChangeScope.SINGLE);
+        lessons.forMonth(teacher, java.time.YearMonth.of(2026, 8));
+        occurrences = lessonRepository.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                first.getSeries().getId(), 0);
+        assertThat(occurrences).extracting(Lesson::getOccurrenceIndex).containsExactly(0, 2, 3);
+
+        lessons.delete(teacher, occurrences.get(1).getId(), LessonChangeScope.FOLLOWING);
         lessons.forMonth(teacher, java.time.YearMonth.of(2026, 10));
         occurrences = lessonRepository.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
                 first.getSeries().getId(), 0);
-        assertThat(occurrences).hasSize(4);
-        assertThat(occurrences.get(0).getStatus()).isEqualTo(LessonStatus.SCHEDULED);
-        assertThat(occurrences.get(1).getStatus()).isEqualTo(LessonStatus.SCHEDULED);
-        assertThat(occurrences.subList(2, occurrences.size()))
-                .allMatch(item -> item.getStatus() == LessonStatus.CANCELLED);
+        assertThat(occurrences).extracting(Lesson::getOccurrenceIndex).containsExactly(0);
 
         mvc.perform(get("/teacher").with(user("teacher").roles("TEACHER")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Каждую неделю")));
         mvc.perform(get("/lessons/{id}", first.getId()).with(user("teacher").roles("TEACHER")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("К этому и последующим")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("к этому и всем последующим")));
     }
 }

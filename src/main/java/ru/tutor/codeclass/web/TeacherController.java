@@ -100,18 +100,18 @@ public class TeacherController {
         return "redirect:/lessons/" + id;
     }
 
-    @PostMapping("/lessons/{id}/cancel")
-    String cancel(Authentication auth, @PathVariable Long id,
+    @PostMapping("/lessons/{id}/delete")
+    String delete(Authentication auth, @PathVariable Long id,
                   @RequestParam(defaultValue = "SINGLE") LessonChangeScope scope, RedirectAttributes flash) {
         try {
-            lessons.cancel(current(auth), id, scope);
+            lessons.delete(current(auth), id, scope);
             flash.addFlashAttribute("success", scope == LessonChangeScope.FOLLOWING
-                    ? "Это и все последующие занятия отменены"
-                    : "Занятие отменено");
+                    ? "Это и все последующие занятия удалены"
+                    : "Занятие удалено");
         } catch (IllegalArgumentException ex) {
             flash.addFlashAttribute("error", ex.getMessage());
         }
-        return "redirect:/lessons/" + id;
+        return "redirect:/teacher";
     }
 
     @PostMapping("/lessons/{id}/materials")

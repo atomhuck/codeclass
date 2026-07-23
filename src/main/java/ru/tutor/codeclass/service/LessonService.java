@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import ru.tutor.codeclass.domain.*;
 import ru.tutor.codeclass.repository.*;
+import java.io.IOException;
+import java.nio.file.*;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -18,12 +20,17 @@ public class LessonService {
     private final UserRepository users;
     private final ConnectionRequestRepository connections;
     private final LessonSeriesRepository seriesRepository;
+    private final AttachmentRepository attachments;
+    private final Path storageRoot;
     private final ZoneId zone;
     private final Clock clock;
     public LessonService(LessonRepository lessons, UserRepository users, ConnectionRequestRepository connections,
-                         LessonSeriesRepository seriesRepository,
-                         @org.springframework.beans.factory.annotation.Value("${app.timezone}") String timezone, Clock clock) {
+                         LessonSeriesRepository seriesRepository, AttachmentRepository attachments,
+                         @org.springframework.beans.factory.annotation.Value("${app.timezone}") String timezone,
+                         @org.springframework.beans.factory.annotation.Value("${app.storage-path}") String storagePath,
+                         Clock clock) {
         this.lessons = lessons; this.users = users; this.connections = connections; this.seriesRepository = seriesRepository;
+        this.attachments = attachments; this.storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
         this.zone = ZoneId.of(timezone); this.clock = clock;
     }
 
@@ -71,21 +78,22 @@ public class LessonService {
     }
 
     @Transactional
-    public void cancel(User teacher, Long id, LessonChangeScope scope) {
+    public void delete(User teacher, Long id, LessonChangeScope scope) {
         Lesson lesson = requireTeacherLesson(teacher, id);
         if (scope == LessonChangeScope.FOLLOWING) {
             requireRecurring(lesson);
             lesson.getSeries().cancelFrom(lesson.getOccurrenceIndex());
-            lessons.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
-                    lesson.getSeries().getId(), lesson.getOccurrenceIndex()).forEach(Lesson::cancel);
+            deleteLessons(lessons.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                    lesson.getSeries().getId(), lesson.getOccurrenceIndex()));
             return;
         }
-        lesson.cancel();
+        if (lesson.isRecurring()) lesson.getSeries().exclude(lesson.getOccurrenceIndex());
+        deleteLessons(List.of(lesson));
     }
 
     @Transactional
-    public void cancel(User teacher, Long id) {
-        cancel(teacher, id, LessonChangeScope.SINGLE);
+    public void delete(User teacher, Long id) {
+        delete(teacher, id, LessonChangeScope.SINGLE);
     }
     @Transactional public void updateMaterials(User teacher, Long id, String homework, String notes) {
         requireTeacherLesson(teacher, id).updateMaterials(blankToNull(homework), blankToNull(notes));
@@ -147,10 +155,28 @@ public class LessonService {
             if (lastIndex < firstIndex) continue;
             var existing = new HashSet<>(lessons.findOccurrenceIndexesBySeriesId(series.getId()));
             for (int index = firstIndex; index <= lastIndex; index++) {
-                if (!existing.contains(index)) generated.add(new Lesson(series, index));
+                if (series.includes(index) && !existing.contains(index)) generated.add(new Lesson(series, index));
             }
         }
         if (!generated.isEmpty()) lessons.saveAll(generated);
+    }
+    private void deleteLessons(List<Lesson> lessonsToDelete) {
+        List<Attachment> attachmentsToDelete = new ArrayList<>();
+        for (Lesson item : lessonsToDelete) {
+            List<Attachment> lessonAttachments = attachments.findByLessonOrderByCreatedAtAsc(item);
+            attachmentsToDelete.addAll(lessonAttachments);
+            for (Attachment attachment : lessonAttachments) {
+                Path file = storageRoot.resolve(attachment.getStoredName()).normalize();
+                if (!file.getParent().equals(storageRoot)) throw new IllegalStateException("Некорректный путь вложения");
+                try { Files.deleteIfExists(file); }
+                catch (IOException ex) { throw new IllegalStateException("Не удалось удалить вложение", ex); }
+            }
+        }
+        if (!attachmentsToDelete.isEmpty()) {
+            attachments.deleteAll(attachmentsToDelete);
+            attachments.flush();
+        }
+        lessons.deleteAll(lessonsToDelete);
     }
     private void requireRecurring(Lesson lesson) {
         if (!lesson.isRecurring()) throw new IllegalArgumentException("Это занятие не входит в еженедельную серию");
