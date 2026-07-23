@@ -52,10 +52,29 @@
     </div>
 
     <section class="attachments-grid">
-        <div class="panel attachment-panel"><div class="panel-heading"><div><p class="eyebrow">Вложения</p><h2>К домашнему заданию</h2></div></div><div th:if="${homeworkFiles.empty}" class="empty compact"><p>Файлов пока нет</p></div><div th:each="file : ${homeworkFiles}" class="file-row"><span class="file-icon">↧</span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить">×</button></form></div><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/attachments(id=${lesson.id})}" method="post" enctype="multipart/form-data" class="upload-form"><input type="hidden" name="category" value="HOMEWORK"><label class="file-picker">+ Выбрать файлы<input type="file" name="files" multiple required></label><button class="button secondary" type="submit">Загрузить</button></form></div>
-        <div class="panel attachment-panel"><div class="panel-heading"><div><p class="eyebrow">Вложения</p><h2>К материалам урока</h2></div></div><div th:if="${notesFiles.empty}" class="empty compact"><p>Файлов пока нет</p></div><div th:each="file : ${notesFiles}" class="file-row"><span class="file-icon">↧</span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить">×</button></form></div><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/attachments(id=${lesson.id})}" method="post" enctype="multipart/form-data" class="upload-form"><input type="hidden" name="category" value="LESSON_NOTES"><label class="file-picker">+ Выбрать файлы<input type="file" name="files" multiple required></label><button class="button secondary" type="submit">Загрузить</button></form></div>
+        <div class="panel attachment-panel"><div class="panel-heading"><div><p class="eyebrow">Вложения</p><h2>К домашнему заданию</h2></div></div><div th:if="${homeworkFiles.empty}" class="empty compact"><p>Файлов пока нет</p></div><div th:each="file : ${homeworkFiles}" class="file-row"><span class="file-icon">↧</span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить">×</button></form></div><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/attachments(id=${lesson.id})}" method="post" enctype="multipart/form-data" class="upload-form"><input type="hidden" name="category" value="HOMEWORK"><label class="file-picker"><span class="file-picker-label">+ Выбрать файлы</span><input type="file" name="files" multiple required></label><button class="button secondary upload-submit" type="submit">Загрузить</button></form></div>
+        <div class="panel attachment-panel"><div class="panel-heading"><div><p class="eyebrow">Вложения</p><h2>К материалам урока</h2></div></div><div th:if="${notesFiles.empty}" class="empty compact"><p>Файлов пока нет</p></div><div th:each="file : ${notesFiles}" class="file-row"><span class="file-icon">↧</span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить">×</button></form></div><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/attachments(id=${lesson.id})}" method="post" enctype="multipart/form-data" class="upload-form"><input type="hidden" name="category" value="LESSON_NOTES"><label class="file-picker"><span class="file-picker-label">+ Выбрать файлы</span><input type="file" name="files" multiple required></label><button class="button secondary upload-submit" type="submit">Загрузить</button></form></div>
     </section>
     <form th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" th:action="@{/teacher/lessons/{id}/delete(id=${lesson.id})}" method="post" class="danger-zone"><div><b>Удалить из расписания</b><span class="danger-hint">Занятие, его заметки и вложения исчезнут безвозвратно.</span><fieldset th:if="${lesson.recurring}" class="scope-inline"><legend>Применить</legend><label><input type="radio" name="scope" value="SINGLE" checked> только к этому занятию</label><label><input type="radio" name="scope" value="FOLLOWING"> к этому и всем последующим</label></fieldset></div><button class="button danger-button" type="submit">Удалить</button></form>
+    <script>
+        document.querySelectorAll(".upload-form").forEach(form => {
+            const input = form.querySelector('input[type="file"]');
+            const label = form.querySelector(".file-picker-label");
+            if (!input) return;
+
+            form.classList.add("js-auto-upload");
+            input.addEventListener("change", () => {
+                if (!input.files?.length || form.classList.contains("is-uploading")) return;
+                form.classList.add("is-uploading");
+                if (label) {
+                    label.textContent = input.files.length === 1
+                        ? `Загрузка: ${input.files[0].name}`
+                        : `Загрузка файлов: ${input.files.length}`;
+                }
+                form.requestSubmit();
+            });
+        });
+    </script>
 </main>
 </body>
 </html>

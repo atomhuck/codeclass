@@ -526,10 +526,30 @@
   }
 
   canvas.on("mouse:wheel", opt => {
-    const delta = opt.e.deltaY;
-    setZoom(canvas.getZoom() * (0.999 ** delta), new fabric.Point(opt.e.offsetX, opt.e.offsetY));
-    opt.e.preventDefault();
-    opt.e.stopPropagation();
+    const event = opt.e;
+    const deltaFactor = event.deltaMode === 1
+      ? 16
+      : event.deltaMode === 2
+        ? canvas.getHeight()
+        : 1;
+    const deltaX = event.deltaX * deltaFactor;
+    const deltaY = event.deltaY * deltaFactor;
+
+    if (event.ctrlKey || event.metaKey) {
+      setZoom(
+        canvas.getZoom() * (0.999 ** deltaY),
+        new fabric.Point(event.offsetX, event.offsetY)
+      );
+    } else {
+      const viewport = [...canvas.viewportTransform];
+      viewport[4] -= deltaX;
+      viewport[5] -= deltaY;
+      canvas.setViewportTransform(viewport);
+      canvas.requestRenderAll();
+      renderRemoteCursors();
+    }
+    event.preventDefault();
+    event.stopPropagation();
   });
   document.getElementById("zoom-in").addEventListener("click", () => setZoom(canvas.getZoom() * 1.2));
   document.getElementById("zoom-out").addEventListener("click", () => setZoom(canvas.getZoom() / 1.2));
