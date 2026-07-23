@@ -1,0 +1,17 @@
+spring:
+  thymeleaf:
+    cache: true
+server:
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        secure: true
+        http-only: true
+        same-site: lax
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never

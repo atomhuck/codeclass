@@ -20,9 +20,19 @@ spring:
 server:
   error:
     include-message: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 app:
   timezone: Europe/Moscow
   storage-path: ${APP_STORAGE_PATH:./uploads}
+  websocket:
+    allowed-origins: ${APP_WEBSOCKET_ALLOWED_ORIGINS:}
   teacher:
     username: ${APP_TEACHER_USERNAME:teacher}
     password: ${APP_TEACHER_PASSWORD:change-me-now}

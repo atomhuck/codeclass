@@ -1,0 +1,99 @@
+name: codeclass
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codeclass}
+      POSTGRES_USER: ${POSTGRES_USER:-codeclass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+    logging: *default-logging
+    networks:
+      - backend
+
+  app:
+    image: ghcr.io/atomhuck/codeclass:${IMAGE_TAG:?Set IMAGE_TAG in .env.production}
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-codeclass}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-codeclass}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      APP_STORAGE_PATH: /app/uploads
+      APP_TEACHER_USERNAME: ${TEACHER_USERNAME:-teacher}
+      APP_TEACHER_PASSWORD: ${TEACHER_PASSWORD:?Set TEACHER_PASSWORD in .env.production}
+      APP_TEACHER_NAME: ${TEACHER_NAME:?Set TEACHER_NAME in .env.production}
+      APP_TEACHER_CODE: ${TEACHER_CODE:?Set TEACHER_CODE in .env.production}
+      APP_WEBSOCKET_ALLOWED_ORIGINS: https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env.production}
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx900m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError
+    volumes:
+      - attachment-data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    mem_limit: 1152m
+    logging: *default-logging
+    networks:
+      - backend
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 128m
+    logging: *default-logging
+    networks:
+      - backend
+
+volumes:
+  postgres-data:
+    name: codeclass-postgres
+  attachment-data:
+    name: codeclass-attachments
+  caddy-data:
+    name: codeclass-caddy-data
+  caddy-config:
+    name: codeclass-caddy-config
+
+networks:
+  backend:
+    name: codeclass-backend

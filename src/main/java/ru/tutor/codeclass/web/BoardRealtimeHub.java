@@ -42,7 +42,7 @@ public class BoardRealtimeHub {
         boardSessions.forEach((id, session) -> {
             if (Objects.equals(id, excludedSessionId) || !session.isOpen()) return;
             try { session.sendMessage(new TextMessage(text)); }
-            catch (IOException ex) {
+            catch (IOException | IllegalStateException ex) {
                 try { session.close(CloseStatus.SERVER_ERROR); } catch (IOException ignored) {}
                 leave(boardId, id);
             }
@@ -52,7 +52,11 @@ public class BoardRealtimeHub {
     public void send(UUID boardId, String sessionId, JsonNode payload) throws IOException {
         var boardSessions = sessions.get(boardId);
         WebSocketSession session = boardSessions == null ? null : boardSessions.get(sessionId);
-        if (session != null && session.isOpen())
+        if (session == null || !session.isOpen()) return;
+        try {
             session.sendMessage(new TextMessage(mapper.writeValueAsString(payload)));
+        } catch (IllegalStateException ex) {
+            leave(boardId, sessionId);
+        }
     }
 }

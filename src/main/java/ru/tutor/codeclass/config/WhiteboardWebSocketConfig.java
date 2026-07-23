@@ -2,6 +2,7 @@ package ru.tutor.codeclass.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.server.*;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 import org.springframework.web.socket.*;
@@ -14,12 +15,22 @@ import java.util.*;
 @EnableWebSocket
 public class WhiteboardWebSocketConfig implements WebSocketConfigurer {
     private final WhiteboardWebSocketHandler handler;
-    public WhiteboardWebSocketConfig(WhiteboardWebSocketHandler handler) { this.handler = handler; }
+    private final String[] allowedOrigins;
+
+    public WhiteboardWebSocketConfig(WhiteboardWebSocketHandler handler,
+                                     @Value("${app.websocket.allowed-origins:}") String allowedOrigins) {
+        this.handler = handler;
+        this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .toArray(String[]::new);
+    }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(handler, "/ws/boards/{publicId}")
+        WebSocketHandlerRegistration registration = registry.addHandler(handler, "/ws/boards/{publicId}")
                 .addInterceptors(new BoardIdInterceptor());
+        if (allowedOrigins.length > 0) registration.setAllowedOrigins(allowedOrigins);
     }
 
     @Bean

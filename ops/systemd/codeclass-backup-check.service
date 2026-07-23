@@ -1,0 +1,11 @@
+[Unit]
+Description=Monthly CodeClass backup integrity check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=codeclass-deploy
+WorkingDirectory=/opt/codeclass
+ExecStart=/opt/codeclass/ops/check-backup.sh
+Nice=15
+IOSchedulingClass=idle

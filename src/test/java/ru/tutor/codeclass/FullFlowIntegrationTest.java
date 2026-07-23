@@ -57,6 +57,9 @@ class FullFlowIntegrationTest {
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
 
     @Test void registrationIsPublicAndTeacherAreaIsProtected() throws Exception {
+        mvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
         mvc.perform(get("/login")).andExpect(status().isOk());
         mvc.perform(get("/teacher")).andExpect(status().is3xxRedirection());
         mvc.perform(get("/teacher").with(user("student").roles("STUDENT"))).andExpect(status().isForbidden());

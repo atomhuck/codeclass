@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily CodeClass backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Europe/Moscow
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
