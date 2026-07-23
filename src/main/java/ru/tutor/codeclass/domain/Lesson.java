@@ -11,6 +11,10 @@ public class Lesson {
     private Long id;
     @ManyToOne(optional = false, fetch = FetchType.LAZY) @JoinColumn(name = "student_id")
     private User student;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "series_id")
+    private LessonSeries series;
+    @Column(name = "occurrence_index")
+    private Integer occurrenceIndex;
     @Column(name = "start_at", nullable = false)
     private Instant startAt;
     @Column(name = "duration_minutes", nullable = false)
@@ -30,8 +34,16 @@ public class Lesson {
         this.student = student; this.startAt = startAt; this.durationMinutes = durationMinutes;
         this.status = LessonStatus.SCHEDULED; this.createdAt = Instant.now(); this.updatedAt = createdAt;
     }
+    public Lesson(LessonSeries series, int occurrenceIndex) {
+        this(series.getStudent(), series.occurrenceStart(occurrenceIndex), series.getDurationMinutes());
+        this.series = series;
+        this.occurrenceIndex = occurrenceIndex;
+    }
     public Long getId() { return id; }
     public User getStudent() { return student; }
+    public LessonSeries getSeries() { return series; }
+    public Integer getOccurrenceIndex() { return occurrenceIndex; }
+    public boolean isRecurring() { return series != null; }
     public Instant getStartAt() { return startAt; }
     public int getDurationMinutes() { return durationMinutes; }
     public LessonStatus getStatus() { return status; }

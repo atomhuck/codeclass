@@ -78,8 +78,11 @@ public class TeacherController {
     String createLesson(Authentication auth, @Valid LessonForm form, BindingResult errors, RedirectAttributes flash) {
         if (errors.hasErrors()) return error(flash, errors.getAllErrors().getFirst().getDefaultMessage(), "/teacher");
         try {
-            Lesson lesson = lessons.create(current(auth), form.getStudentId(), form.getStartAt(), form.getDurationMinutes());
-            flash.addFlashAttribute("success", "Занятие добавлено в расписание");
+            Lesson lesson = lessons.create(current(auth), form.getStudentId(), form.getStartAt(),
+                    form.getDurationMinutes(), form.getRecurrence());
+            flash.addFlashAttribute("success", form.getRecurrence() == LessonRecurrence.WEEKLY
+                    ? "Еженедельные занятия добавлены в расписание"
+                    : "Занятие добавлено в расписание");
             return "redirect:/lessons/" + lesson.getId();
         } catch (IllegalArgumentException ex) { flash.addFlashAttribute("error", ex.getMessage()); return "redirect:/teacher"; }
     }
@@ -87,14 +90,28 @@ public class TeacherController {
     @PostMapping("/lessons/{id}/reschedule")
     String reschedule(Authentication auth, @PathVariable Long id, @Valid LessonForm form, BindingResult errors, RedirectAttributes flash) {
         if (errors.hasErrors()) return error(flash, errors.getAllErrors().getFirst().getDefaultMessage(), "/lessons/" + id);
-        try { lessons.reschedule(current(auth), id, form.getStartAt(), form.getDurationMinutes()); flash.addFlashAttribute("success", "Занятие перенесено"); }
+        try {
+            lessons.reschedule(current(auth), id, form.getStartAt(), form.getDurationMinutes(), form.getScope());
+            flash.addFlashAttribute("success", form.getScope() == LessonChangeScope.FOLLOWING
+                    ? "Это и все последующие занятия перенесены"
+                    : "Занятие перенесено");
+        }
         catch (IllegalArgumentException ex) { flash.addFlashAttribute("error", ex.getMessage()); }
         return "redirect:/lessons/" + id;
     }
 
     @PostMapping("/lessons/{id}/cancel")
-    String cancel(Authentication auth, @PathVariable Long id, RedirectAttributes flash) {
-        lessons.cancel(current(auth), id); flash.addFlashAttribute("success", "Занятие отменено"); return "redirect:/lessons/" + id;
+    String cancel(Authentication auth, @PathVariable Long id,
+                  @RequestParam(defaultValue = "SINGLE") LessonChangeScope scope, RedirectAttributes flash) {
+        try {
+            lessons.cancel(current(auth), id, scope);
+            flash.addFlashAttribute("success", scope == LessonChangeScope.FOLLOWING
+                    ? "Это и все последующие занятия отменены"
+                    : "Занятие отменено");
+        } catch (IllegalArgumentException ex) {
+            flash.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/lessons/" + id;
     }
 
     @PostMapping("/lessons/{id}/materials")

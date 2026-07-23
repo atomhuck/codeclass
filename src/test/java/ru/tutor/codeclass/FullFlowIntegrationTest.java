@@ -18,6 +18,7 @@ import ru.tutor.codeclass.repository.*;
 import ru.tutor.codeclass.service.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
@@ -49,6 +50,7 @@ class FullFlowIntegrationTest {
     @Autowired AttachmentService attachments;
     @Autowired TeacherProfileService profiles;
     @Autowired UserRepository users;
+    @Autowired LessonRepository lessonRepository;
     @Autowired ConnectionRequestRepository requestRepository;
     private MockMvc mvc;
 
@@ -96,5 +98,54 @@ class FullFlowIntegrationTest {
 
         lessons.cancel(teacher, lesson.getId());
         assertThat(lessons.requireAccessible(student, lesson.getId()).getStatus()).isEqualTo(LessonStatus.CANCELLED);
+    }
+
+    @Test void weeklySeriesCanBeRescheduledAndCancelledFromSelectedLesson() throws Exception {
+        User teacher = accounts.requireByUsername("teacher");
+        User student = accounts.registerStudent("Ученик серии", "weekly_student", "password123");
+        connections.send(student, "teacher_code");
+        ConnectionRequest request = requestRepository.findByStudentOrderByCreatedAtDesc(student).getFirst();
+        connections.process(teacher, request.getId(), true);
+
+        Lesson first = lessons.create(teacher, student.getId(),
+                LocalDateTime.of(2026, 8, 5, 17, 0), 60, LessonRecurrence.WEEKLY);
+        lessons.forMonth(teacher, java.time.YearMonth.of(2026, 8));
+        var occurrences = lessonRepository.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                first.getSeries().getId(), 0);
+        assertThat(occurrences).hasSize(4);
+
+        Lesson second = occurrences.get(1);
+        lessons.reschedule(teacher, second.getId(), LocalDateTime.of(2026, 8, 13, 17, 0),
+                60, LessonChangeScope.SINGLE);
+        lessons.reschedule(teacher, second.getId(), LocalDateTime.of(2026, 8, 14, 18, 30),
+                90, LessonChangeScope.FOLLOWING);
+        occurrences = lessonRepository.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                first.getSeries().getId(), 0);
+        ZoneId moscow = ZoneId.of("Europe/Moscow");
+        assertThat(LocalDateTime.ofInstant(occurrences.get(0).getStartAt(), moscow))
+                .isEqualTo(LocalDateTime.of(2026, 8, 5, 17, 0));
+        assertThat(LocalDateTime.ofInstant(occurrences.get(1).getStartAt(), moscow))
+                .isEqualTo(LocalDateTime.of(2026, 8, 14, 18, 30));
+        assertThat(LocalDateTime.ofInstant(occurrences.get(2).getStartAt(), moscow))
+                .isEqualTo(LocalDateTime.of(2026, 8, 21, 18, 30));
+        assertThat(occurrences.subList(1, occurrences.size()))
+                .allMatch(item -> item.getDurationMinutes() == 90);
+
+        lessons.cancel(teacher, occurrences.get(2).getId(), LessonChangeScope.FOLLOWING);
+        lessons.forMonth(teacher, java.time.YearMonth.of(2026, 10));
+        occurrences = lessonRepository.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                first.getSeries().getId(), 0);
+        assertThat(occurrences).hasSize(4);
+        assertThat(occurrences.get(0).getStatus()).isEqualTo(LessonStatus.SCHEDULED);
+        assertThat(occurrences.get(1).getStatus()).isEqualTo(LessonStatus.SCHEDULED);
+        assertThat(occurrences.subList(2, occurrences.size()))
+                .allMatch(item -> item.getStatus() == LessonStatus.CANCELLED);
+
+        mvc.perform(get("/teacher").with(user("teacher").roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Каждую неделю")));
+        mvc.perform(get("/lessons/{id}", first.getId()).with(user("teacher").roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("К этому и последующим")));
     }
 }

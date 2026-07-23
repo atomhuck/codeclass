@@ -14,6 +14,11 @@
                 <label>Ученик<select th:field="*{studentId}" required><option value="">Выберите ученика</option><option th:each="student : ${students}" th:value="${student.id}" th:text="${student.displayName}"></option></select></label>
                 <label>Дата и время<input type="datetime-local" th:field="*{startAt}" required></label>
                 <label>Длительность<select th:field="*{durationMinutes}"><option value="45">45 минут</option><option value="60">60 минут</option><option value="90">90 минут</option><option value="120">120 минут</option></select></label>
+                <fieldset class="choice-fieldset">
+                    <legend>Повторение</legend>
+                    <label class="choice-card"><input type="radio" th:field="*{recurrence}" value="ONCE"><span><b>Только в этот день</b><small>Одно занятие без повторов</small></span></label>
+                    <label class="choice-card"><input type="radio" th:field="*{recurrence}" value="WEEKLY"><span><b id="weekly-label">Каждую неделю</b><small>В этот день недели и это время</small></span></label>
+                </fieldset>
                 <button class="button primary" type="submit">Добавить в календарь</button>
             </form>
         </details>
@@ -60,5 +65,22 @@
         </details>
     </section>
 </main>
+<script>
+    (() => {
+        const start = document.getElementById('startAt');
+        const label = document.getElementById('weekly-label');
+        const weekdays = ['воскресеньям', 'понедельникам', 'вторникам', 'средам', 'четвергам', 'пятницам', 'субботам'];
+        const updateWeeklyLabel = () => {
+            if (!start.value) {
+                label.textContent = 'Каждую неделю';
+                return;
+            }
+            const [year, month, day] = start.value.slice(0, 10).split('-').map(Number);
+            label.textContent = `Каждую неделю по ${weekdays[new Date(year, month - 1, day).getDay()]}`;
+        };
+        start.addEventListener('input', updateWeeklyLabel);
+        updateWeeklyLabel();
+    })();
+</script>
 </body>
 </html>
