@@ -24,7 +24,8 @@ if [[ ! -s "${authorized_keys}" ]]; then
 fi
 
 install -d -m 0755 /etc/ssh/sshd_config.d
-cat > /etc/ssh/sshd_config.d/99-codeclass.conf <<EOF
+rm -f /etc/ssh/sshd_config.d/99-codeclass.conf
+cat > /etc/ssh/sshd_config.d/01-codeclass.conf <<EOF
 Port ${ssh_port}
 PubkeyAuthentication yes
 PasswordAuthentication no
