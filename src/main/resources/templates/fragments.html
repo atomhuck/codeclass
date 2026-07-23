@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#080b13">
+    <title th:text="${title} + ' — CodeClass'">CodeClass</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<nav th:fragment="nav(user, area)" class="topbar">
+    <a class="brand" th:href="${user.role.name() == 'TEACHER'} ? @{/teacher} : @{/student}">
+        <span class="brand-mark">&gt;_</span><span>CodeClass</span>
+    </a>
+    <div class="nav-links">
+        <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher}" th:classappend="${area == 'dashboard'} ? 'active'">Календарь</a>
+        <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/students}" th:classappend="${area == 'students'} ? 'active'">Ученики</a>
+        <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}" class="active">Мои занятия</a>
+    </div>
+    <div class="account">
+        <span class="account-name" th:text="${user.displayName}">Имя</span>
+        <form th:action="@{/logout}" method="post"><button class="icon-button" type="submit" title="Выйти">↗</button></form>
+    </div>
+</nav>
+</body>
+</html>

@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: codeclass
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/codeclass}
+    username: ${SPRING_DATASOURCE_USERNAME:codeclass}
+    password: ${SPRING_DATASOURCE_PASSWORD:codeclass}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 200MB
+  thymeleaf:
+    cache: false
+server:
+  error:
+    include-message: never
+app:
+  timezone: Europe/Moscow
+  storage-path: ${APP_STORAGE_PATH:./uploads}
+  teacher:
+    username: ${APP_TEACHER_USERNAME:teacher}
+    password: ${APP_TEACHER_PASSWORD:change-me-now}
+    name: ${APP_TEACHER_NAME:Преподаватель}
+    code: ${APP_TEACHER_CODE:teacher_code}

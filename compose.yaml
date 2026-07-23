@@ -1,0 +1,36 @@
+name: codeclass
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codeclass}
+      POSTGRES_USER: ${POSTGRES_USER:-codeclass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codeclass}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codeclass} -d ${POSTGRES_DB:-codeclass}"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-codeclass}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-codeclass}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-codeclass}
+      APP_STORAGE_PATH: /app/uploads
+      APP_TEACHER_USERNAME: ${TEACHER_USERNAME:-teacher}
+      APP_TEACHER_PASSWORD: ${TEACHER_PASSWORD:-change-me-now}
+      APP_TEACHER_NAME: ${TEACHER_NAME:-Преподаватель}
+      APP_TEACHER_CODE: ${TEACHER_CODE:-teacher_code}
+    volumes:
+      - attachment-data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres-data:
+  attachment-data:

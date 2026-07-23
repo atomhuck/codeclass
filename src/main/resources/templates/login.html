@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Вход')}"></head>
+<body class="auth-page">
+<main class="auth-shell">
+    <section class="auth-copy">
+        <a class="brand large" href="/login"><span class="brand-mark">&gt;_</span><span>CodeClass</span></a>
+        <p class="eyebrow">Личный кабинет</p>
+        <h1>Учёба без потерянных файлов и забытых дедлайнов.</h1>
+        <p class="lead">Расписание, домашние задания и материалы уроков — в одном спокойном пространстве.</p>
+        <div class="terminal-card" aria-hidden="true">
+            <span><b>$</b> next_lesson --status</span>
+            <span class="terminal-output">готово к работе <i>●</i></span>
+        </div>
+    </section>
+    <section class="auth-card">
+        <div><p class="eyebrow">С возвращением</p><h2>Войти в аккаунт</h2></div>
+        <div th:if="${param.error}" class="alert error">Неверный логин или пароль</div>
+        <div th:if="${param.logout}" class="alert success">Вы вышли из аккаунта</div>
+        <form th:action="@{/login}" method="post" class="stack-form">
+            <label>Логин<input name="username" autocomplete="username" required autofocus placeholder="your_login"></label>
+            <label>Пароль<input type="password" name="password" autocomplete="current-password" required placeholder="••••••••"></label>
+            <button class="button primary full" type="submit">Войти <span>→</span></button>
+        </form>
+        <p class="auth-switch">Ещё нет аккаунта? <a th:href="@{/register}">Зарегистрироваться</a></p>
+    </section>
+    <footer>Подготовка к ЕГЭ и ОГЭ по информатике</footer>
+</main>
+</body>
+</html>
