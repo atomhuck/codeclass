@@ -129,6 +129,20 @@ class WhiteboardIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Доска занятия")));
 
+        var deletedPath = whiteboards.deleteObject(student, board.getPublicId(), pathId);
+        assertThat(deletedPath.changed()).isTrue();
+        assertThat(whiteboards.snapshot(teacher, board.getPublicId()).objects())
+                .extracting(WhiteboardService.ObjectView::id).doesNotContain(pathId);
+
+        var deletedImage = whiteboards.deleteObject(student, board.getPublicId(), uploaded.object().id());
+        assertThat(deletedImage.changed()).isTrue();
+        assertThat(whiteboards.snapshot(teacher, board.getPublicId()).objects()).isEmpty();
+        assertThatThrownBy(() -> whiteboards.loadImage(student, board.getPublicId(), uploaded.object().id()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        whiteboards.createPath(teacher, board.getPublicId(), UUID.randomUUID(), path);
+        whiteboards.uploadImage(teacher, board.getPublicId(),
+                new MockMultipartFile("file", "clear.png", "image/png", png(40, 30)), 20, 30);
         assertThatThrownBy(() -> whiteboards.clear(student, board.getPublicId()))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         whiteboards.clear(teacher, board.getPublicId());

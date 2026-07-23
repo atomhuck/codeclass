@@ -109,11 +109,14 @@ public class WhiteboardService {
         Optional<WhiteboardObject> found = objects.findByIdAndBoard(objectId, board);
         if (found.isEmpty()) return new DeleteResult(board.getRevision(), objectId, false, null);
         WhiteboardObject item = found.get();
-        String storedName = images.findById(objectId).map(WhiteboardImage::getStoredName).orElse(null);
+        Optional<WhiteboardImage> storedImage = images.findById(objectId);
+        String storedName = storedImage.map(WhiteboardImage::getStoredName).orElse(null);
+        storedImage.ifPresent(images::delete);
+        if (storedImage.isPresent()) images.flush();
         objects.delete(item);
         objects.flush();
         long revision = board.nextRevision();
-        deletePhysicalAfterCommit(List.of(storedName));
+        deletePhysicalAfterCommit(storedName == null ? List.of() : List.of(storedName));
         return new DeleteResult(revision, objectId, true, storedName);
     }
 
@@ -121,7 +124,10 @@ public class WhiteboardService {
     public ClearResult clear(User user, UUID publicId) {
         Whiteboard board = locked(user, publicId);
         if (user.getRole() != Role.TEACHER) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        List<String> storedNames = images.findByBoard(board).stream().map(WhiteboardImage::getStoredName).toList();
+        List<WhiteboardImage> boardImages = images.findByBoard(board);
+        List<String> storedNames = boardImages.stream().map(WhiteboardImage::getStoredName).toList();
+        images.deleteAll(boardImages);
+        if (!boardImages.isEmpty()) images.flush();
         objects.deleteByBoard(board);
         objects.flush();
         long revision = board.nextRevision();
