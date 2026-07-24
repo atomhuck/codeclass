@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Обновление аккаунта')}"></head>
+<body class="auth-page"><main class="auth-shell compact-auth">
+    <section class="auth-card">
+        <a class="brand"><span class="brand-mark">&gt;_</span><span>CodeClass</span></a>
+        <div><p class="eyebrow">Обновление сервиса</p><h1>Завершите настройку</h1><p class="lead">Укажите email для восстановления пароля и примите актуальные документы.</p></div>
+        <div th:if="${error}" class="alert error" th:text="${error}"></div>
+        <form th:action="@{/account/consent}" method="post" class="stack-form">
+            <label>Email<input type="email" name="email" th:value="${email}" required autocomplete="email"></label>
+            <label class="legal-check"><input type="checkbox" name="termsAccepted" value="true"><span>Я принимаю <a th:href="@{/legal/terms}" target="_blank">Пользовательское соглашение</a></span></label>
+            <label class="legal-check"><input type="checkbox" name="personalDataAccepted" value="true"><span>Я даю <a th:href="@{/legal/personal-data}" target="_blank">согласие на обработку персональных данных</a>. Если мне нет 18 лет, подтверждаю согласие родителя или законного представителя.</span></label>
+            <button class="button primary full">Продолжить <span>→</span></button>
+        </form>
+    </section>
+</main></body></html>

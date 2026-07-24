@@ -17,6 +17,9 @@ public class LessonSeries {
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "student_id")
     private User student;
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "teacher_id")
+    private User teacher;
 
     @Column(name = "anchor_start_at", nullable = false)
     private Instant anchorStartAt;
@@ -40,7 +43,8 @@ public class LessonSeries {
 
     protected LessonSeries() {}
 
-    public LessonSeries(User student, Instant anchorStartAt, int durationMinutes) {
+    public LessonSeries(User teacher, User student, Instant anchorStartAt, int durationMinutes) {
+        this.teacher = teacher;
         this.student = student;
         this.anchorStartAt = anchorStartAt;
         this.durationMinutes = durationMinutes;
@@ -50,6 +54,7 @@ public class LessonSeries {
 
     public UUID getId() { return id; }
     public User getStudent() { return student; }
+    public User getTeacher() { return teacher; }
     public Instant getAnchorStartAt() { return anchorStartAt; }
     public int getDurationMinutes() { return durationMinutes; }
     public Integer getCancelledFromIndex() { return cancelledFromIndex; }

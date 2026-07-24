@@ -16,8 +16,8 @@ import java.util.*;
 
 @Service
 public class AttachmentService {
-    public static final long MAX_SIZE = 20L * 1024 * 1024;
-    public static final int MAX_PER_CATEGORY = 10;
+    public static final long MAX_SIZE = 15L * 1024 * 1024;
+    public static final int MAX_PER_CATEGORY = 5;
     private static final Set<String> BLOCKED = Set.of("exe", "com", "bat", "cmd", "ps1", "sh", "js", "jar", "msi", "scr", "dll");
     private final AttachmentRepository attachments;
     private final LessonService lessonService;
@@ -35,12 +35,12 @@ public class AttachmentService {
         Lesson lesson = lessonService.requireTeacherLesson(teacher, lessonId);
         List<MultipartFile> actual = files == null ? List.of() : files.stream().filter(f -> !f.isEmpty()).toList();
         long current = attachments.countByLessonAndCategory(lesson, category);
-        if (current + actual.size() > MAX_PER_CATEGORY) throw new IllegalArgumentException("В одном разделе может быть не более 10 файлов");
+        if (current + actual.size() > MAX_PER_CATEGORY) throw new IllegalArgumentException("В одном разделе может быть не более 5 файлов");
         for (MultipartFile file : actual) storeOne(lesson, category, file);
     }
 
     private void storeOne(Lesson lesson, AttachmentCategory category, MultipartFile file) {
-        if (file.getSize() > MAX_SIZE) throw new IllegalArgumentException("Файл превышает лимит 20 МБ");
+        if (file.getSize() > MAX_SIZE) throw new IllegalArgumentException("Файл превышает лимит 15 МБ");
         String original = Optional.ofNullable(file.getOriginalFilename()).orElse("file");
         original = Paths.get(original).getFileName().toString();
         if (original.length() > 255) original = original.substring(original.length() - 255);

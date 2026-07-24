@@ -9,6 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import ru.tutor.codeclass.domain.User;
+import ru.tutor.codeclass.security.CodeClassPrincipal;
 import ru.tutor.codeclass.service.*;
 import java.io.IOException;
 import java.time.Instant;
@@ -37,6 +38,7 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
         if (session.getPrincipal() == null) { session.close(CloseStatus.NOT_ACCEPTABLE); return; }
         UUID boardId = boardId(session);
         User user = accounts.requireByUsername(session.getPrincipal().getName());
+        if (!validSession(session, user)) { session.close(CloseStatus.POLICY_VIOLATION); return; }
         try { boards.requireAccessible(user, boardId); }
         catch (ResponseStatusException ex) { session.close(CloseStatus.POLICY_VIOLATION); return; }
         session.getAttributes().put("displayName", user.getDisplayName());
@@ -57,6 +59,7 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
         }
         UUID boardId = boardId(session);
         User user = accounts.requireByUsername(session.getPrincipal().getName());
+        if (!validSession(session, user)) { session.close(CloseStatus.POLICY_VIOLATION); return; }
         JsonNode incoming;
         try { incoming = mapper.readTree(message.getPayload()); }
         catch (JacksonException ex) { error(session, "Некорректное сообщение"); return; }
@@ -188,6 +191,12 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
 
     private UUID boardId(WebSocketSession session) {
         return (UUID) session.getAttributes().get("boardId");
+    }
+
+    private boolean validSession(WebSocketSession session, User user) {
+        return user.isEnabled() && session.getPrincipal() instanceof org.springframework.security.core.Authentication auth
+                && auth.getPrincipal() instanceof CodeClassPrincipal principal
+                && principal.authVersion() == user.getAuthVersion();
     }
 
     private boolean allow(String sessionId) {

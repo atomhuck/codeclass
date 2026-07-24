@@ -4,6 +4,10 @@
 	@internal path /actuator /actuator/*
 	respond @internal 404
 
+	request_body {
+		max_size 80MB
+	}
+
 	reverse_proxy app:8080
 
 	header {
@@ -15,7 +19,6 @@
 	}
 
 	log {
-		output stdout
-		format console
+		output discard
 	}
 }

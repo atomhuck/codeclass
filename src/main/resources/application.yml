@@ -13,14 +13,28 @@ spring:
       hibernate.jdbc.time_zone: UTC
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 200MB
+      max-file-size: 15MB
+      max-request-size: 80MB
   thymeleaf:
     cache: false
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.yandex.ru}
+    port: ${SPRING_MAIL_PORT:465}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
 server:
   error:
     include-message: never
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -29,10 +43,22 @@ management:
     health:
       show-details: never
 app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  account-gate-enabled: ${APP_ACCOUNT_GATE_ENABLED:true}
   timezone: Europe/Moscow
   storage-path: ${APP_STORAGE_PATH:./uploads}
   websocket:
     allowed-origins: ${APP_WEBSOCKET_ALLOWED_ORIGINS:}
+  mail:
+    enabled: ${APP_MAIL_ENABLED:false}
+    from: ${APP_MAIL_FROM:no-reply@repethelper.ru}
+    reply-to: ${APP_MAIL_REPLY_TO:efimok05@gmail.com}
+  legal:
+    operator-name: ${APP_LEGAL_OPERATOR_NAME:Ефимов Ефим Александрович}
+    status: ${APP_LEGAL_STATUS:самозанятый}
+    inn: ${APP_LEGAL_INN:701774242586}
+    city: ${APP_LEGAL_CITY:Краснодар}
+    email: ${APP_LEGAL_EMAIL:efimok05@gmail.com}
   teacher:
     username: ${APP_TEACHER_USERNAME:teacher}
     password: ${APP_TEACHER_PASSWORD:change-me-now}

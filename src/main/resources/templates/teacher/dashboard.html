@@ -58,11 +58,13 @@
 
     <section class="panel code-panel">
         <div><p class="eyebrow">Код подключения</p><h2>Ваш код: <code th:text="${profile.inviteCode}">teacher_code</code></h2><p>Сообщите его ученику — новый запрос появится в разделе «Ученики».</p></div>
+        <div class="code-actions"><button class="button secondary copy-invite-code" type="button" th:data-code="${profile.inviteCode}">Скопировать код</button>
+        <form th:action="@{/teacher/profile/regenerate-code}" method="post" onsubmit="return confirm('Старый код перестанет работать. Создать новый?')"><button class="button secondary" type="submit">Новый код</button></form>
         <details><summary class="button secondary">Изменить профиль</summary>
             <form th:action="@{/teacher/profile}" th:object="${profileForm}" method="post" class="inline-profile">
                 <label>Отображаемое имя<input th:field="*{displayName}" required></label><label>Код<input th:field="*{inviteCode}" required></label><button class="button primary" type="submit">Сохранить</button>
             </form>
-        </details>
+        </details></div>
     </section>
 </main>
 <script>
@@ -80,6 +82,11 @@
         };
         start.addEventListener('input', updateWeeklyLabel);
         updateWeeklyLabel();
+        document.querySelector(".copy-invite-code")?.addEventListener("click", async event => {
+            await navigator.clipboard.writeText(event.currentTarget.dataset.code);
+            event.currentTarget.textContent = "Скопировано";
+            setTimeout(() => event.currentTarget.textContent = "Скопировать код", 1500);
+        });
     })();
 </script>
 </body>

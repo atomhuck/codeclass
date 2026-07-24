@@ -62,6 +62,7 @@ class WhiteboardIntegrationTest {
         registry.add("app.teacher.password", () -> "secure-password");
         registry.add("app.teacher.name", () -> "Преподаватель доски");
         registry.add("app.teacher.code", () -> "board_teacher_code");
+        registry.add("app.account-gate-enabled", () -> "false");
     }
 
     @Autowired WebApplicationContext context;

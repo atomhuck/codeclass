@@ -11,6 +11,8 @@ public class Lesson {
     private Long id;
     @ManyToOne(optional = false, fetch = FetchType.LAZY) @JoinColumn(name = "student_id")
     private User student;
+    @ManyToOne(optional = false, fetch = FetchType.LAZY) @JoinColumn(name = "teacher_id")
+    private User teacher;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "series_id")
     private LessonSeries series;
     @Column(name = "occurrence_index")
@@ -30,17 +32,18 @@ public class Lesson {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
     protected Lesson() {}
-    public Lesson(User student, Instant startAt, int durationMinutes) {
-        this.student = student; this.startAt = startAt; this.durationMinutes = durationMinutes;
+    public Lesson(User teacher, User student, Instant startAt, int durationMinutes) {
+        this.teacher = teacher; this.student = student; this.startAt = startAt; this.durationMinutes = durationMinutes;
         this.status = LessonStatus.SCHEDULED; this.createdAt = Instant.now(); this.updatedAt = createdAt;
     }
     public Lesson(LessonSeries series, int occurrenceIndex) {
-        this(series.getStudent(), series.occurrenceStart(occurrenceIndex), series.getDurationMinutes());
+        this(series.getTeacher(), series.getStudent(), series.occurrenceStart(occurrenceIndex), series.getDurationMinutes());
         this.series = series;
         this.occurrenceIndex = occurrenceIndex;
     }
     public Long getId() { return id; }
     public User getStudent() { return student; }
+    public User getTeacher() { return teacher; }
     public LessonSeries getSeries() { return series; }
     public Integer getOccurrenceIndex() { return occurrenceIndex; }
     public boolean isRecurring() { return series != null; }

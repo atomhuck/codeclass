@@ -6,22 +6,35 @@
     <section class="auth-copy">
         <a class="brand large" th:href="@{/login}"><span class="brand-mark">&gt;_</span><span>CodeClass</span></a>
         <p class="eyebrow">Стартуем</p>
-        <h1>Все занятия всегда под рукой.</h1>
-        <p class="lead">Создайте аккаунт ученика, введите код преподавателя и получите доступ к своему расписанию.</p>
-        <ol class="steps"><li><b>01</b> Создайте аккаунт</li><li><b>02</b> Отправьте код</li><li><b>03</b> Начинайте учиться</li></ol>
+        <h1>Занятия, материалы и общая доска в одном месте.</h1>
+        <p class="lead">Создайте аккаунт ученика или преподавателя. Преподаватель сразу получит уникальный код приглашения.</p>
     </section>
     <section class="auth-card">
-        <div><p class="eyebrow">Новый ученик</p><h2>Создать аккаунт</h2></div>
+        <div><p class="eyebrow">Новый аккаунт</p><h2>Регистрация</h2></div>
         <div th:if="${registrationError}" class="alert error" th:text="${registrationError}"></div>
         <form th:action="@{/register}" th:object="${form}" method="post" class="stack-form">
+            <fieldset class="choice-fieldset">
+                <legend>Тип аккаунта</legend>
+                <label class="choice-card"><input type="radio" th:field="*{role}" value="STUDENT"><span><b>Ученик</b><small>Расписание и материалы</small></span></label>
+                <label class="choice-card"><input type="radio" th:field="*{role}" value="TEACHER"><span><b>Преподаватель</b><small>Ученики и управление занятиями</small></span></label>
+            </fieldset>
+            <small class="field-error" th:errors="*{role}"></small>
             <label>Имя и фамилия<input th:field="*{displayName}" autocomplete="name" required placeholder="Алексей Смирнов"><small th:errors="*{displayName}"></small></label>
             <label>Логин<input th:field="*{username}" autocomplete="username" required placeholder="alex_sm"><small th:errors="*{username}"></small></label>
-            <label>Пароль<input type="password" th:field="*{password}" autocomplete="new-password" required placeholder="Минимум 8 символов"><small th:errors="*{password}"></small></label>
+            <label>Email<input type="email" th:field="*{email}" autocomplete="email" required placeholder="name@example.ru"><small th:errors="*{email}"></small></label>
+            <label>Пароль<input type="password" th:field="*{password}" autocomplete="new-password" required placeholder="Минимум 10 символов"><small th:errors="*{password}"></small></label>
+            <label>Повторите пароль<input type="password" th:field="*{passwordConfirmation}" autocomplete="new-password" required><small th:errors="*{passwordConfirmation}"></small></label>
+            <small class="field-error" th:errors="*{passwordLengthValid}"></small>
+            <small class="field-error" th:errors="*{passwordConfirmationValid}"></small>
+            <label class="legal-check"><input type="checkbox" th:field="*{termsAccepted}"><span>Я принимаю <a th:href="@{/legal/terms}" target="_blank">Пользовательское соглашение</a></span></label>
+            <small class="field-error" th:errors="*{termsAccepted}"></small>
+            <label class="legal-check"><input type="checkbox" th:field="*{personalDataAccepted}"><span>Я даю <a th:href="@{/legal/personal-data}" target="_blank">согласие на обработку персональных данных</a>. Если мне нет 18 лет, подтверждаю согласие родителя или законного представителя.</span></label>
+            <small class="field-error" th:errors="*{personalDataAccepted}"></small>
             <button class="button primary full" type="submit">Создать аккаунт <span>→</span></button>
         </form>
         <p class="auth-switch">Уже зарегистрированы? <a th:href="@{/login}">Войти</a></p>
     </section>
-    <footer>Данные доступны только вам и вашему преподавателю</footer>
+    <footer><a th:href="@{/legal/privacy}">Политика конфиденциальности</a></footer>
 </main>
 </body>
 </html>

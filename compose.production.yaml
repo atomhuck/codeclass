@@ -41,6 +41,19 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-codeclass}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
       APP_STORAGE_PATH: /app/uploads
+      APP_BASE_URL: https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env.production}
+      APP_MAIL_ENABLED: "true"
+      APP_MAIL_FROM: ${MAIL_FROM:-no-reply@repethelper.ru}
+      APP_MAIL_REPLY_TO: ${MAIL_REPLY_TO:-efimok05@gmail.com}
+      SPRING_MAIL_HOST: ${MAIL_HOST:-smtp.yandex.ru}
+      SPRING_MAIL_PORT: ${MAIL_PORT:-465}
+      SPRING_MAIL_USERNAME: ${MAIL_USERNAME:?Set MAIL_USERNAME in .env.production}
+      SPRING_MAIL_PASSWORD: ${MAIL_PASSWORD:?Set MAIL_PASSWORD in .env.production}
+      APP_LEGAL_OPERATOR_NAME: ${APP_LEGAL_OPERATOR_NAME:-Ефимов Ефим Александрович}
+      APP_LEGAL_STATUS: ${APP_LEGAL_STATUS:-самозанятый}
+      APP_LEGAL_INN: ${APP_LEGAL_INN:-701774242586}
+      APP_LEGAL_CITY: ${APP_LEGAL_CITY:-Краснодар}
+      APP_LEGAL_EMAIL: ${APP_LEGAL_EMAIL:-efimok05@gmail.com}
       APP_TEACHER_USERNAME: ${TEACHER_USERNAME:-teacher}
       APP_TEACHER_PASSWORD: ${TEACHER_PASSWORD:?Set TEACHER_PASSWORD in .env.production}
       APP_TEACHER_NAME: ${TEACHER_NAME:?Set TEACHER_NAME in .env.production}

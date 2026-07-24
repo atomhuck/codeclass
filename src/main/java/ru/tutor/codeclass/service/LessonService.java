@@ -44,10 +44,10 @@ public class LessonService {
             throw new IllegalArgumentException("Сначала примите ученика");
         Instant start = localStart.atZone(zone).toInstant();
         if (recurrence == LessonRecurrence.WEEKLY) {
-            LessonSeries series = seriesRepository.save(new LessonSeries(student, start, duration));
+            LessonSeries series = seriesRepository.save(new LessonSeries(teacher, student, start, duration));
             return lessons.save(new Lesson(series, 0));
         }
-        return lessons.save(new Lesson(student, start, duration));
+        return lessons.save(new Lesson(teacher, student, start, duration));
     }
 
     @Transactional
@@ -104,6 +104,8 @@ public class LessonService {
     @Transactional(readOnly = true)
     public Lesson requireAccessible(User user, Long id) {
         Lesson lesson = lessons.findWithStudentById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (user.getRole() == Role.TEACHER && !lesson.getTeacher().getId().equals(user.getId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (user.getRole() == Role.STUDENT && !lesson.getStudent().getId().equals(user.getId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         return lesson;
@@ -112,25 +114,28 @@ public class LessonService {
     @Transactional(readOnly = true)
     public Lesson requireTeacherLesson(User teacher, Long id) {
         requireTeacher(teacher);
-        return lessons.findWithStudentById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        Lesson lesson = lessons.findWithStudentById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (!lesson.getTeacher().getId().equals(teacher.getId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lesson;
     }
 
     @Transactional
     public List<Lesson> forMonth(User user, YearMonth month) {
         Instant from = month.atDay(1).atStartOfDay(zone).toInstant();
         Instant to = month.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant();
-        materializeBetween(from, to.minusNanos(1));
+        materializeBetween(user, from, to.minusNanos(1));
         return user.getRole() == Role.TEACHER
-                ? lessons.findByStartAtBetweenOrderByStartAtAsc(from, to)
+                ? lessons.findByTeacherAndStartAtBetweenOrderByStartAtAsc(user, from, to)
                 : lessons.findByStudentAndStartAtBetweenOrderByStartAtAsc(user, from, to);
     }
 
     @Transactional
     public List<Lesson> upcoming(User user) {
         Instant now = clock.instant();
-        materializeBetween(now, now.plus(180, ChronoUnit.DAYS));
+        materializeBetween(user, now, now.plus(180, ChronoUnit.DAYS));
         List<Lesson> result = user.getRole() == Role.TEACHER
-                ? lessons.findTop8ByStartAtGreaterThanEqualOrderByStartAtAsc(now)
+                ? lessons.findTop8ByTeacherAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now)
                 : lessons.findTop8ByStudentAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now);
         return result.stream().filter(l -> l.getStatus() == LessonStatus.SCHEDULED).toList();
     }
@@ -143,10 +148,12 @@ public class LessonService {
     }
     public boolean isPast(Lesson lesson) { return lesson.isPast(clock.instant()); }
     public ZoneId zone() { return zone; }
-    private void materializeBetween(Instant from, Instant until) {
+    private void materializeBetween(User user, Instant from, Instant until) {
         final long weekSeconds = Duration.ofDays(7).toSeconds();
         List<Lesson> generated = new ArrayList<>();
-        for (LessonSeries series : seriesRepository.findAll()) {
+        List<LessonSeries> relevantSeries = user.getRole() == Role.TEACHER
+                ? seriesRepository.findByTeacher(user) : seriesRepository.findByStudent(user);
+        for (LessonSeries series : relevantSeries) {
             if (series.getAnchorStartAt().isAfter(until)) continue;
             long secondsToFrom = Duration.between(series.getAnchorStartAt(), from).getSeconds();
             int firstIndex = secondsToFrom <= 0 ? 0 : (int) Math.min(

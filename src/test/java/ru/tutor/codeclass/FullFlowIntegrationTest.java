@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,6 +42,7 @@ class FullFlowIntegrationTest {
         registry.add("app.teacher.password", () -> "secure-password");
         registry.add("app.teacher.name", () -> "Иван Петрович");
         registry.add("app.teacher.code", () -> "teacher_code");
+        registry.add("app.account-gate-enabled", () -> "false");
     }
 
     @Autowired WebApplicationContext context;
@@ -52,6 +54,9 @@ class FullFlowIntegrationTest {
     @Autowired UserRepository users;
     @Autowired LessonRepository lessonRepository;
     @Autowired ConnectionRequestRepository requestRepository;
+    @Autowired AccountTokenService accountTokens;
+    @Autowired LoginAttemptService loginAttempts;
+    @Autowired PasswordEncoder passwordEncoder;
     private MockMvc mvc;
 
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
@@ -64,8 +69,11 @@ class FullFlowIntegrationTest {
         mvc.perform(get("/teacher")).andExpect(status().is3xxRedirection());
         mvc.perform(get("/teacher").with(user("student").roles("STUDENT"))).andExpect(status().isForbidden());
         mvc.perform(post("/register").with(csrf())
-                .param("displayName", "Новый Ученик").param("username", "new_student").param("password", "password123"))
-                .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/student?welcome"));
+                .param("displayName", "Новый Ученик").param("username", "new_student")
+                .param("email", "new.student@example.test").param("password", "password123")
+                .param("passwordConfirmation", "password123").param("role", "STUDENT")
+                .param("termsAccepted", "true").param("personalDataAccepted", "true"))
+                .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/verify-email/pending?welcome"));
         assertThat(users.findByUsernameIgnoreCase("new_student")).isPresent();
     }
 
@@ -152,5 +160,55 @@ class FullFlowIntegrationTest {
         mvc.perform(get("/lessons/{id}", first.getId()).with(user("teacher").roles("TEACHER")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("к этому и всем последующим")));
+    }
+
+    @Test void teachersAreStrictlyIsolatedAndPasswordsAreHashed() {
+        User firstTeacher = accounts.requireByUsername("teacher");
+        User secondTeacher = accounts.register("Второй Преподаватель", "teacher_two",
+                "teacher.two@example.test", "anotherPassword123", Role.TEACHER, true);
+        assertThat(secondTeacher.getPasswordHash()).isNotEqualTo("anotherPassword123");
+        assertThat(secondTeacher.getPasswordHash()).startsWith("$2");
+        assertThat(profiles.requireFor(secondTeacher).getInviteCode()).matches("T-[A-Z2-9]{8}");
+        assertThatThrownBy(() -> accounts.register("Дубликат", "different_login",
+                "TEACHER.TWO@example.test", "anotherPassword456", Role.TEACHER, true))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Email");
+
+        User student = accounts.register("Ученик второго", "second_student",
+                "second.student@example.test", "studentPassword123", Role.STUDENT, true);
+        connections.send(student, profiles.requireFor(secondTeacher).getInviteCode());
+        ConnectionRequest request = requestRepository.findByStudentOrderByCreatedAtDesc(student).getFirst();
+        connections.process(secondTeacher, request.getId(), true);
+        Lesson lesson = lessons.create(secondTeacher, student.getId(),
+                LocalDateTime.of(2026, 10, 1, 16, 0), 60);
+
+        assertThatThrownBy(() -> lessons.requireTeacherLesson(firstTeacher, lesson.getId()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((org.springframework.web.server.ResponseStatusException) ex)
+                        .getStatusCode().value()).isEqualTo(403));
+        assertThat(lessons.forMonth(firstTeacher, java.time.YearMonth.of(2026, 10)))
+                .doesNotContain(lesson);
+    }
+
+    @Test void emailVerificationResetAndBruteForceProtectionWork() {
+        User user = accounts.register("Проверка безопасности", "security_student",
+                "security.student@example.test", "InitialPassword123", Role.STUDENT, true);
+        assertThat(passwordEncoder.matches("InitialPassword123", user.getPasswordHash())).isTrue();
+        assertThat(user.getPasswordHash()).isNotEqualTo("InitialPassword123");
+
+        String verification = accountTokens.createVerification(user);
+        assertThat(accountTokens.verifyEmail(verification)).isTrue();
+        assertThat(accountTokens.verifyEmail(verification)).isFalse();
+        assertThat(accounts.requireByUsername("security_student").isEmailVerified()).isTrue();
+
+        var delivery = accountTokens.createPasswordReset("SECURITY.STUDENT@EXAMPLE.TEST").orElseThrow();
+        assertThat(accountTokens.resetPassword(delivery.token(), "ChangedPassword123")).isTrue();
+        assertThat(accountTokens.resetPassword(delivery.token(), "AnotherPassword123")).isFalse();
+        User changed = accounts.requireByUsername("security_student");
+        assertThat(passwordEncoder.matches("ChangedPassword123", changed.getPasswordHash())).isTrue();
+        assertThat(changed.getAuthVersion()).isEqualTo(1);
+
+        for (int i = 0; i < 5; i++) loginAttempts.loginFailed("security_student", "192.0.2.10");
+        assertThat(loginAttempts.loginAllowed("security_student", "192.0.2.10")).isFalse();
     }
 }

@@ -27,8 +27,8 @@ import java.util.regex.Pattern;
 @Service
 public class WhiteboardService {
     public static final long MAX_IMAGE_SIZE = 10L * 1024 * 1024;
-    public static final int MAX_IMAGES = 20;
-    public static final long MAX_BOARD_IMAGE_SIZE = 100L * 1024 * 1024;
+    public static final int MAX_IMAGES = 30;
+    public static final long MAX_BOARD_IMAGE_SIZE = 150L * 1024 * 1024;
     public static final int MAX_OBJECTS = 5_000;
     public static final int MAX_PATH_VALUES = 25_000;
     private static final Pattern COLOR = Pattern.compile("^#[0-9a-fA-F]{6}$");
@@ -140,13 +140,15 @@ public class WhiteboardService {
         Whiteboard board = locked(user, publicId);
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("Выберите изображение");
         if (file.getSize() > MAX_IMAGE_SIZE) throw new IllegalArgumentException("Изображение превышает 10 МБ");
-        if (images.countByBoard(board) >= MAX_IMAGES) throw new IllegalArgumentException("На доске может быть не более 20 изображений");
+        if (images.countByBoard(board) >= MAX_IMAGES) throw new IllegalArgumentException("На доске может быть не более 30 изображений");
         if (images.totalSizeByBoard(board) + file.getSize() > MAX_BOARD_IMAGE_SIZE)
-            throw new IllegalArgumentException("Изображения на доске превышают общий лимит 100 МБ");
+            throw new IllegalArgumentException("Изображения на доске превышают общий лимит 150 МБ");
         if (objects.countByBoard(board) >= MAX_OBJECTS) throw new IllegalArgumentException("На доске достигнут лимит объектов");
         requireCoordinate(left); requireCoordinate(top);
 
         ProcessedImage processed = processImage(file);
+        if (images.totalSizeByBoard(board) + processed.bytes().length > MAX_BOARD_IMAGE_SIZE)
+            throw new IllegalArgumentException("Изображения на доске превышают общий лимит 150 МБ");
         UUID objectId = UUID.randomUUID();
         String storedName = objectId + processed.extension();
         Path target = safePath(storedName);
@@ -219,7 +221,7 @@ public class WhiteboardService {
     }
 
     private void requireAccess(User user, Lesson lesson) {
-        if (user.getRole() == Role.TEACHER) return;
+        if (user.getRole() == Role.TEACHER && lesson.getTeacher().getId().equals(user.getId())) return;
         if (user.getRole() != Role.STUDENT || !lesson.getStudent().getId().equals(user.getId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }

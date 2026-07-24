@@ -60,6 +60,17 @@ public class TeacherController {
         return "redirect:/teacher";
     }
 
+    @PostMapping("/profile/regenerate-code")
+    String regenerateCode(Authentication auth, RedirectAttributes flash) {
+        try {
+            profiles.regenerateCode(current(auth));
+            flash.addFlashAttribute("success", "Создан новый код приглашения");
+        } catch (IllegalStateException ex) {
+            flash.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/teacher";
+    }
+
     @PostMapping("/requests/{id}/accept")
     String accept(Authentication auth, @PathVariable Long id, RedirectAttributes flash) {
         return processRequest(auth, id, true, flash);
