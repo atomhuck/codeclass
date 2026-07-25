@@ -57,6 +57,7 @@ class FullFlowIntegrationTest {
     @Autowired LessonSeriesRepository lessonSeriesRepository;
     @Autowired ConnectionRequestRepository requestRepository;
     @Autowired StudentRemovalService studentRemovals;
+    @Autowired WhiteboardService whiteboards;
     @Autowired AccountTokenService accountTokens;
     @Autowired LoginAttemptService loginAttempts;
     @Autowired PasswordEncoder passwordEncoder;
@@ -219,6 +220,7 @@ class FullFlowIntegrationTest {
         connections.process(teacher, request.getId(), true);
         Lesson lesson = lessons.create(teacher, student.getId(), LocalDateTime.of(2026, 9, 2, 17, 0),
                 60, LessonRecurrence.WEEKLY);
+        whiteboards.getOrCreate(teacher, lesson);
         attachments.store(teacher, lesson.getId(), AttachmentCategory.HOMEWORK, List.of(
                 new MockMultipartFile("files", "task.pdf", "application/pdf", "task".getBytes(StandardCharsets.UTF_8))));
 
@@ -226,6 +228,7 @@ class FullFlowIntegrationTest {
         assertThat(preview.lessonCount()).isGreaterThanOrEqualTo(1);
         assertThat(preview.seriesCount()).isEqualTo(1);
         assertThat(preview.attachmentCount()).isEqualTo(1);
+        assertThat(preview.boardCount()).isEqualTo(1);
         studentRemovals.remove(teacher, student.getId());
 
         assertThat(users.findById(student.getId())).isPresent();

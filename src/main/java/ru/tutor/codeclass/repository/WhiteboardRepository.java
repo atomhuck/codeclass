@@ -19,5 +19,13 @@ public interface WhiteboardRepository extends JpaRepository<Whiteboard, Long> {
 
     @EntityGraph(attributePaths = {"lesson", "lesson.student", "lesson.teacher"})
     List<Whiteboard> findByLessonIn(Collection<Lesson> lessons);
+
+    @Query("select b.publicId from Whiteboard b where b.lesson in :lessons")
+    List<UUID> findPublicIdsByLessonIn(@Param("lessons") Collection<Lesson> lessons);
+
+    @Modifying
+    @Query("delete from Whiteboard b where b.lesson in :lessons")
+    void deleteByLessonIn(@Param("lessons") Collection<Lesson> lessons);
+
     long countByLessonIn(Collection<Lesson> lessons);
 }

@@ -28,12 +28,7 @@ public class StudentRemovalController {
     }
 
     @PostMapping("/{studentId}/remove")
-    String remove(Authentication auth, @PathVariable Long studentId,
-                  @RequestParam(defaultValue = "false") boolean confirmed, RedirectAttributes flash) {
-        if (!confirmed) {
-            flash.addFlashAttribute("error", "Подтвердите удаление ученика");
-            return "redirect:/teacher/students/" + studentId + "/remove";
-        }
+    String remove(Authentication auth, @PathVariable Long studentId, RedirectAttributes flash) {
         var summary = removals.remove(current(auth), studentId);
         flash.addFlashAttribute("success", "Ученик удалён: занятий — " + summary.lessonCount()
                 + ", файлов — " + summary.attachmentCount() + ", досок — " + summary.boardCount());

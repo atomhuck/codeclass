@@ -199,7 +199,11 @@ public class LessonService {
             attachments.deleteAll(attachmentsToDelete);
             attachments.flush();
         }
+        // The database cascades a board's objects and images. Removing board rows
+        // before lessons avoids Hibernate retaining a board for a deleted lesson.
+        whiteboards.deleteBoardsForLessons(lessonsToDelete);
         lessons.deleteAll(lessonsToDelete);
+        lessons.flush();
         deleteAttachmentFilesAfterCommit(attachmentFiles);
         whiteboards.deleteStoredImages(boardImages);
     }

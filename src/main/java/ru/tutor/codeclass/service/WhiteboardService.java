@@ -198,7 +198,12 @@ public class WhiteboardService {
     @Transactional(readOnly = true)
     public List<UUID> publicIdsForLessons(Collection<Lesson> lessons) {
         if (lessons.isEmpty()) return List.of();
-        return boards.findByLessonIn(lessons).stream().map(Whiteboard::getPublicId).toList();
+        return boards.findPublicIdsByLessonIn(lessons);
+    }
+
+    /** Deletes board records before their lessons, so Hibernate cannot retain an invalid reference. */
+    public void deleteBoardsForLessons(Collection<Lesson> lessons) {
+        if (!lessons.isEmpty()) boards.deleteByLessonIn(lessons);
     }
 
     public void deleteStoredImages(Collection<String> names) { deletePhysicalAfterCommit(names); }
