@@ -17,12 +17,13 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, AccountService accounts,
-                                             LoginAttemptService attempts,
+                                             LoginAttemptService attempts, InvitationService invitations,
                                              @Value("${app.account-gate-enabled:true}") boolean accountGateEnabled) throws Exception {
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/css/**", "/js/**", "/vendor/**", "/login", "/register",
                         "/forgot-password", "/reset-password",
                         "/oauth2/**", "/login/oauth2/**", "/auth/vk/**",
+                        "/invite/**",
                         "/legal/**", "/error", "/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/teacher/**").hasRole("TEACHER")
                 .requestMatchers("/student/**").hasRole("STUDENT")
@@ -38,9 +39,10 @@ public class SecurityConfig {
                     } else if (!user.isEmailVerified()) {
                         response.sendRedirect("/verify-email/pending");
                     } else {
+                        String invitation = invitations.pendingPath(request.getSession(false)).orElse(null);
                         boolean teacher = authentication.getAuthorities().stream()
                                 .anyMatch(a -> a.getAuthority().equals("ROLE_" + Role.TEACHER));
-                        response.sendRedirect(teacher ? "/teacher" : "/student");
+                        response.sendRedirect(invitation != null ? invitation : (teacher ? "/teacher" : "/student"));
                     }
                 })
                 .failureHandler((request, response, exception) -> {

@@ -33,6 +33,9 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     List<Lesson> findByStudentOrderByStartAtDesc(User student);
 
     @EntityGraph(attributePaths = "student")
+    List<Lesson> findByTeacherAndStudentOrderByStartAtAsc(User teacher, User student);
+
+    @EntityGraph(attributePaths = "student")
     List<Lesson> findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(UUID seriesId, int occurrenceIndex);
 
     @Query("select l.occurrenceIndex from Lesson l where l.series.id = :seriesId")

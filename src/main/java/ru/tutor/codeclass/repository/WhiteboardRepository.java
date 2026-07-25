@@ -19,4 +19,5 @@ public interface WhiteboardRepository extends JpaRepository<Whiteboard, Long> {
 
     @EntityGraph(attributePaths = {"lesson", "lesson.student", "lesson.teacher"})
     List<Whiteboard> findByLessonIn(Collection<Lesson> lessons);
+    long countByLessonIn(Collection<Lesson> lessons);
 }

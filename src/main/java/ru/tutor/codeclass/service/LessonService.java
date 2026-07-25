@@ -4,6 +4,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import ru.tutor.codeclass.domain.*;
 import ru.tutor.codeclass.repository.*;
 import java.io.IOException;
@@ -97,6 +99,19 @@ public class LessonService {
     public void delete(User teacher, Long id) {
         delete(teacher, id, LessonChangeScope.SINGLE);
     }
+
+    @Transactional
+    public DeletedLessons deleteForTeacherStudent(User teacher, User student) {
+        requireTeacher(teacher);
+        List<Lesson> items = lessons.findByTeacherAndStudentOrderByStartAtAsc(teacher, student);
+        List<java.util.UUID> boardIds = whiteboards.publicIdsForLessons(items);
+        deleteLessons(items);
+        // A lesson references its series, therefore make sure the lesson rows are
+        // gone before removing the now-unused series in the same transaction.
+        lessons.flush();
+        seriesRepository.deleteAll(seriesRepository.findByTeacherAndStudent(teacher, student));
+        return new DeletedLessons(items.size(), boardIds);
+    }
     @Transactional public void updateMaterials(User teacher, Long id, String homework, String notes) {
         requireTeacherLesson(teacher, id).updateMaterials(blankToNull(homework), blankToNull(notes));
     }
@@ -172,14 +187,12 @@ public class LessonService {
     private void deleteLessons(List<Lesson> lessonsToDelete) {
         List<String> boardImages = whiteboards.storedImagesForLessons(lessonsToDelete);
         List<Attachment> attachmentsToDelete = new ArrayList<>();
+        List<String> attachmentFiles = new ArrayList<>();
         for (Lesson item : lessonsToDelete) {
             List<Attachment> lessonAttachments = attachments.findByLessonOrderByCreatedAtAsc(item);
             attachmentsToDelete.addAll(lessonAttachments);
             for (Attachment attachment : lessonAttachments) {
-                Path file = storageRoot.resolve(attachment.getStoredName()).normalize();
-                if (!file.getParent().equals(storageRoot)) throw new IllegalStateException("Некорректный путь вложения");
-                try { Files.deleteIfExists(file); }
-                catch (IOException ex) { throw new IllegalStateException("Не удалось удалить вложение", ex); }
+                attachmentFiles.add(attachment.getStoredName());
             }
         }
         if (!attachmentsToDelete.isEmpty()) {
@@ -187,11 +200,27 @@ public class LessonService {
             attachments.flush();
         }
         lessons.deleteAll(lessonsToDelete);
+        deleteAttachmentFilesAfterCommit(attachmentFiles);
         whiteboards.deleteStoredImages(boardImages);
+    }
+
+    private void deleteAttachmentFilesAfterCommit(List<String> names) {
+        if (names.isEmpty()) return;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() {
+                names.forEach(name -> {
+                    try {
+                        Path file = storageRoot.resolve(name).normalize();
+                        if (file.getParent().equals(storageRoot)) Files.deleteIfExists(file);
+                    } catch (IOException ignored) { /* inaccessible files are never exposed and can be cleaned later */ }
+                });
+            }
+        });
     }
     private void requireRecurring(Lesson lesson) {
         if (!lesson.isRecurring()) throw new IllegalArgumentException("Это занятие не входит в еженедельную серию");
     }
     private void requireTeacher(User user) { if (user.getRole() != Role.TEACHER) throw new ResponseStatusException(HttpStatus.FORBIDDEN); }
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+    public record DeletedLessons(int lessonCount, List<java.util.UUID> boardIds) {}
 }

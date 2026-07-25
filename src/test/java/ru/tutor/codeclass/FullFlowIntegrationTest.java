@@ -54,7 +54,9 @@ class FullFlowIntegrationTest {
     @Autowired TeacherProfileService profiles;
     @Autowired UserRepository users;
     @Autowired LessonRepository lessonRepository;
+    @Autowired LessonSeriesRepository lessonSeriesRepository;
     @Autowired ConnectionRequestRepository requestRepository;
+    @Autowired StudentRemovalService studentRemovals;
     @Autowired AccountTokenService accountTokens;
     @Autowired LoginAttemptService loginAttempts;
     @Autowired PasswordEncoder passwordEncoder;
@@ -156,7 +158,7 @@ class FullFlowIntegrationTest {
 
     @Test void completeTutorWorkflowAndOwnershipProtection() throws Exception {
         User teacher = accounts.requireByUsername("teacher");
-        profiles.update(teacher, "Иван Сергеевич", "teacher_code");
+        profiles.update(teacher, "Иван Сергеевич");
         assertThat(accounts.requireByUsername("teacher").getDisplayName()).isEqualTo("Иван Сергеевич");
         User student = accounts.registerStudent("Алексей Смирнов", "alex_flow", "password123");
         connections.send(student, "teacher_code");
@@ -186,6 +188,50 @@ class FullFlowIntegrationTest {
 
         lessons.delete(teacher, lesson.getId());
         assertThat(lessonRepository.findById(lesson.getId())).isEmpty();
+    }
+
+    @Test
+    void invitationLinkKeepsItsContextAndTeacherCanRemoveOnlyTheirStudentData() throws Exception {
+        User teacher = accounts.register("Invite Teacher", "invite_teacher", "invite.teacher@example.test",
+                "InvitePassword123", Role.TEACHER, true);
+        User student = accounts.register("Invite Student", "invite_student", "invite.student@example.test",
+                "InvitePassword123", Role.STUDENT, true);
+        student.verifyEmail();
+        student = users.save(student);
+        String code = profiles.requireFor(teacher).getInviteCode();
+        MockHttpSession session = new MockHttpSession();
+
+        mvc.perform(get("/invite/{code}", code).session(session))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Invite Teacher")));
+        assertThat(session.getAttribute(InvitationService.PENDING_INVITE_CODE)).isEqualTo(code);
+
+        var principal = accounts.principalFor(student);
+        mvc.perform(post("/invite/{code}/request", code).session(session).with(csrf())
+                        .with(authentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                principal, null, principal.getAuthorities()))))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/student"));
+        assertThat(requestRepository.findByStudentOrderByCreatedAtDesc(student)).singleElement()
+                .extracting(ConnectionRequest::getStatus).isEqualTo(ConnectionStatus.PENDING);
+
+        ConnectionRequest request = requestRepository.findByStudentOrderByCreatedAtDesc(student).getFirst();
+        connections.process(teacher, request.getId(), true);
+        Lesson lesson = lessons.create(teacher, student.getId(), LocalDateTime.of(2026, 9, 2, 17, 0),
+                60, LessonRecurrence.WEEKLY);
+        attachments.store(teacher, lesson.getId(), AttachmentCategory.HOMEWORK, List.of(
+                new MockMultipartFile("files", "task.pdf", "application/pdf", "task".getBytes(StandardCharsets.UTF_8))));
+
+        StudentRemovalService.RemovalPreview preview = studentRemovals.preview(teacher, student.getId());
+        assertThat(preview.lessonCount()).isGreaterThanOrEqualTo(1);
+        assertThat(preview.seriesCount()).isEqualTo(1);
+        assertThat(preview.attachmentCount()).isEqualTo(1);
+        studentRemovals.remove(teacher, student.getId());
+
+        assertThat(users.findById(student.getId())).isPresent();
+        assertThat(requestRepository.findByStudentOrderByCreatedAtDesc(student)).isEmpty();
+        assertThat(lessonRepository.findByTeacherAndStudentOrderByStartAtAsc(teacher, student)).isEmpty();
+        assertThat(lessonSeriesRepository.findByTeacherAndStudent(teacher, student)).isEmpty();
     }
 
     @Test void weeklySeriesCanBeRescheduledAndDeletedFromSelectedLesson() throws Exception {

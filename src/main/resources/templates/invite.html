@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Приглашение в CodeClass')}"></head>
+<body class="auth-page">
+<main class="auth-shell compact-auth">
+    <section class="auth-card role-card invite-card">
+        <p class="eyebrow">Приглашение в CodeClass</p>
+        <h1>Занятия с <span th:text="${invite.teacherName}">преподавателем</span></h1>
+        <p class="lead">После подключения преподаватель сможет назначать занятия и прикреплять материалы.</p>
+        <div th:if="${success}" class="alert success" th:text="${success}"></div>
+        <div th:if="${error}" class="alert error" th:text="${error}"></div>
+
+        <div th:if="${state == 'GUEST'}" class="stack-form">
+            <p>Войдите в существующий аккаунт или зарегистрируйтесь как ученик. После этого вы вернётесь к этому приглашению.</p>
+            <a class="button primary full" th:href="@{/login}">Войти <span>→</span></a>
+            <a class="button secondary full" th:href="@{/register}">Создать аккаунт ученика</a>
+        </div>
+        <div th:if="${state == 'NOT_STUDENT'}" class="panel invite-state">
+            <b>Это приглашение предназначено для ученика.</b>
+            <p>В текущем аккаунте выбрана роль преподавателя.</p>
+            <a class="button secondary" th:href="@{/teacher}">В кабинет</a>
+        </div>
+        <div th:if="${state == 'READY'}" class="stack-form">
+            <p>Проверьте преподавателя и отправьте запрос. Подключение произойдёт после его подтверждения.</p>
+            <form th:action="@{/invite/{code}/request(code=${invite.code})}" method="post">
+                <button class="button primary full" type="submit">Отправить запрос <span>→</span></button>
+            </form>
+        </div>
+        <div th:if="${state == 'PENDING'}" class="panel invite-state">
+            <b>Запрос уже отправлен.</b>
+            <p>Дождитесь подтверждения преподавателя.</p>
+            <a class="button secondary" th:href="@{/student}">В кабинет ученика</a>
+        </div>
+        <div th:if="${state == 'CONNECTED'}" class="panel invite-state">
+            <b>Вы уже подключены к этому преподавателю.</b>
+            <a class="button primary" th:href="@{/student}">Открыть расписание</a>
+        </div>
+        <div th:if="${state == 'CONNECTED_TO_OTHER'}" class="panel invite-state">
+            <b>Вы уже подключены к другому преподавателю.</b>
+            <p>Сначала предыдущий преподаватель должен удалить связь с вашим аккаунтом.</p>
+            <a class="button secondary" th:href="@{/student}">В кабинет ученика</a>
+        </div>
+    </section>
+</main>
+</body>
+</html>

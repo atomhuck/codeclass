@@ -59,4 +59,21 @@ public class BoardRealtimeHub {
             leave(boardId, sessionId);
         }
     }
+
+    public void closeBoards(Collection<UUID> boardIds) {
+        for (UUID boardId : boardIds) {
+            var boardSessions = sessions.remove(boardId);
+            if (boardSessions == null) continue;
+            JsonNode event = mapper.createObjectNode().put("type", "board.deleted");
+            String text;
+            try { text = mapper.writeValueAsString(event); }
+            catch (JacksonException ex) { text = null; }
+            for (WebSocketSession session : boardSessions.values()) {
+                try {
+                    if (text != null && session.isOpen()) session.sendMessage(new TextMessage(text));
+                    session.close(CloseStatus.NORMAL.withReason("Board deleted"));
+                } catch (IOException | IllegalStateException ignored) { }
+            }
+        }
+    }
 }

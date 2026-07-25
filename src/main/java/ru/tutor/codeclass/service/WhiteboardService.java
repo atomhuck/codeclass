@@ -195,6 +195,12 @@ public class WhiteboardService {
         return images.findByLessons(lessons).stream().map(WhiteboardImage::getStoredName).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<UUID> publicIdsForLessons(Collection<Lesson> lessons) {
+        if (lessons.isEmpty()) return List.of();
+        return boards.findByLessonIn(lessons).stream().map(Whiteboard::getPublicId).toList();
+    }
+
     public void deleteStoredImages(Collection<String> names) { deletePhysicalAfterCommit(names); }
 
     @EventListener(ApplicationReadyEvent.class)

@@ -25,10 +25,12 @@ public class AuthController {
     private final NotificationMailService mail;
     private final LoginAttemptService attempts;
     private final VkAuthService vk;
+    private final InvitationService invitations;
 
     public AuthController(AccountService accounts, AccountTokenService tokens,
-                          NotificationMailService mail, LoginAttemptService attempts, VkAuthService vk) {
-        this.accounts = accounts; this.tokens = tokens; this.mail = mail; this.attempts = attempts; this.vk = vk;
+                          NotificationMailService mail, LoginAttemptService attempts, VkAuthService vk,
+                          InvitationService invitations) {
+        this.accounts = accounts; this.tokens = tokens; this.mail = mail; this.attempts = attempts; this.vk = vk; this.invitations = invitations;
     }
 
     @GetMapping("/login") String login(Model model) { model.addAttribute("vkEnabled", vk.isEnabled()); return "login"; }
@@ -60,7 +62,7 @@ public class AuthController {
     }
 
     @PostMapping("/account/consent")
-    String consent(Authentication auth, @RequestParam String email,
+    String consent(Authentication auth, @RequestParam String email, HttpSession session,
                    @RequestParam(defaultValue = "false") boolean termsAccepted,
                    @RequestParam(defaultValue = "false") boolean personalDataAccepted,
                    RedirectAttributes flash) {
@@ -71,7 +73,7 @@ public class AuthController {
         try {
             User user = current(auth);
             User updated = accounts.completeLegacyProfile(user, email);
-            if (updated.isEmailVerified()) return homeFor(updated);
+            if (updated.isEmailVerified()) return homeFor(updated, session);
             safeSendVerification(updated);
             return "redirect:/verify-email/pending";
         } catch (IllegalArgumentException ex) {
@@ -107,7 +109,7 @@ public class AuthController {
                 if (!user.isEnabled()) throw new IllegalArgumentException("Аккаунт отключён");
                 vk.recordLogin(existing.get()); authenticate(user, request);
                 attempts.loginSucceeded(user.getUsername()); vk.clearPending(request.getSession());
-                return homeFor(user);
+                return homeFor(user, request.getSession());
             }
             if (profile.email() == null || profile.email().isBlank()) {
                 vk.clearPending(request.getSession());
@@ -140,7 +142,7 @@ public class AuthController {
         try {
             User user = vk.createAccount(profile, form.getRole());
             vk.clearPending(session); authenticate(user, request);
-            return homeFor(user);
+            return homeFor(user, session);
         } catch (IllegalArgumentException ex) {
             model.addAttribute("registrationError", ex.getMessage());
             model.addAttribute("vkName", profile.displayName());
@@ -175,17 +177,17 @@ public class AuthController {
     }
 
     @GetMapping("/verify-email/pending")
-    String verificationPending(Authentication auth, Model model) {
+    String verificationPending(Authentication auth, HttpSession session, Model model) {
         User user = current(auth);
-        if (user.isEmailVerified()) return homeFor(user);
+        if (user.isEmailVerified()) return homeFor(user, session);
         model.addAttribute("user", user);
         return "verify-email-pending";
     }
 
     @PostMapping("/verify-email")
-    String verify(Authentication auth, @RequestParam String code, RedirectAttributes flash) {
+    String verify(Authentication auth, @RequestParam String code, HttpSession session, RedirectAttributes flash) {
         User user = current(auth);
-        if (tokens.verifyEmail(user, code)) return homeFor(user);
+        if (tokens.verifyEmail(user, code)) return homeFor(user, session);
         flash.addFlashAttribute("error",
                 "Неверный или просроченный код. После пяти ошибок запросите новый код.");
         return "redirect:/verify-email/pending";
@@ -275,7 +277,9 @@ public class AuthController {
 
     private User current(Authentication auth) { return accounts.requireByUsername(auth.getName()); }
 
-    private String homeFor(User user) {
+    private String homeFor(User user, HttpSession session) {
+        String invitation = invitations.pendingPath(session).orElse(null);
+        if (invitation != null) return "redirect:" + invitation;
         return user.getRole() == Role.TEACHER ? "redirect:/teacher" : "redirect:/student";
     }
 }

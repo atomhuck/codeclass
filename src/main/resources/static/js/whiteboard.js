@@ -23,6 +23,7 @@
   let socket = null;
   let reconnectAttempt = 0;
   let reconnectTimer = null;
+  let boardDeleted = false;
   let connected = false;
   let snapshotLoading = false;
   let currentTool = "pencil";
@@ -127,6 +128,7 @@
       remoteCursors.forEach(item => item.element.remove());
       remoteCursors.clear();
       clearRemoteStrokes();
+      if (boardDeleted) return;
       const delay = Math.min(15000, 500 * (2 ** reconnectAttempt++));
       reconnectTimer = setTimeout(connect, delay);
     };
@@ -271,6 +273,12 @@
           pendingDeletes.clear();
           clearRemoteStrokes();
         });
+        break;
+      case "board.deleted":
+        boardDeleted = true;
+        clearTimeout(reconnectTimer);
+        setConnected(false);
+        showToast("Доска удалена преподавателем");
         break;
       case "sync.required":
         await loadSnapshot();

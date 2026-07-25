@@ -13,4 +13,5 @@ public interface LessonSeriesRepository extends JpaRepository<LessonSeries, UUID
     List<LessonSeries> findByTeacher(User teacher);
     @EntityGraph(attributePaths = "student")
     List<LessonSeries> findByStudent(User student);
+    List<LessonSeries> findByTeacherAndStudent(User teacher, User student);
 }

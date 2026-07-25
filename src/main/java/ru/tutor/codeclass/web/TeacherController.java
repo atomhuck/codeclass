@@ -1,6 +1,7 @@
 package ru.tutor.codeclass.web;
 
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -20,9 +21,11 @@ public class TeacherController {
     private final TeacherProfileService profiles;
     private final LessonService lessons;
     private final CalendarService calendars;
+    private final String baseUrl;
     public TeacherController(AccountService accounts, ConnectionService connections, TeacherProfileService profiles,
-                             LessonService lessons, CalendarService calendars) {
+                             LessonService lessons, CalendarService calendars, @Value("${app.base-url}") String baseUrl) {
         this.accounts = accounts; this.connections = connections; this.profiles = profiles; this.lessons = lessons; this.calendars = calendars;
+        this.baseUrl = baseUrl.replaceAll("/+$", "");
     }
 
     @GetMapping
@@ -31,10 +34,11 @@ public class TeacherController {
         YearMonth selected = safeMonth(year, month);
         var profile = profiles.requireFor(teacher);
         var profileForm = new TeacherProfileForm();
-        profileForm.setDisplayName(teacher.getDisplayName()); profileForm.setInviteCode(profile.getInviteCode());
+        profileForm.setDisplayName(teacher.getDisplayName());
         model.addAttribute("user", teacher);
         model.addAttribute("profile", profile);
         model.addAttribute("profileForm", profileForm);
+        model.addAttribute("inviteUrl", baseUrl + "/invite/" + profile.getInviteCode());
         model.addAttribute("lessonForm", new LessonForm());
         model.addAttribute("pending", connections.pendingFor(teacher));
         model.addAttribute("students", connections.studentsFor(teacher));
@@ -55,19 +59,8 @@ public class TeacherController {
     @PostMapping("/profile")
     String updateProfile(Authentication auth, @Valid TeacherProfileForm form, BindingResult errors, RedirectAttributes flash) {
         if (errors.hasErrors()) return error(flash, errors.getAllErrors().getFirst().getDefaultMessage(), "/teacher");
-        try { profiles.update(current(auth), form.getDisplayName(), form.getInviteCode()); flash.addFlashAttribute("success", "Профиль обновлён"); }
+        try { profiles.update(current(auth), form.getDisplayName()); flash.addFlashAttribute("success", "Профиль обновлён"); }
         catch (IllegalArgumentException ex) { flash.addFlashAttribute("error", ex.getMessage()); }
-        return "redirect:/teacher";
-    }
-
-    @PostMapping("/profile/regenerate-code")
-    String regenerateCode(Authentication auth, RedirectAttributes flash) {
-        try {
-            profiles.regenerateCode(current(auth));
-            flash.addFlashAttribute("success", "Создан новый код приглашения");
-        } catch (IllegalStateException ex) {
-            flash.addFlashAttribute("error", ex.getMessage());
-        }
         return "redirect:/teacher";
     }
 
