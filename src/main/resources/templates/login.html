@@ -21,7 +21,12 @@
         <div th:if="${param.reset}" class="alert success">Пароль изменён. Войдите с новым паролем.</div>
         <div th:if="${param.passwordChanged}" class="alert success">Пароль был изменён. Войдите снова.</div>
         <div th:if="${error}" class="alert error" th:text="${error}"></div>
-        <a th:if="${vkEnabled}" class="button secondary full vk-button" th:href="@{/oauth2/authorization/vk}">Продолжить с VK</a>
+        <a th:if="${vkEnabled}" class="button full vk-button" th:href="@{/oauth2/authorization/vk}">
+            <span class="vk-logo" aria-hidden="true">
+                <svg viewBox="0 0 48 48"><path d="M24.7 36.7C10 36.7 1.6 26.6 1.3 9.8h7.4c.2 12.3 5.7 17.5 10.1 18.6V9.8h7v10.6c4.3-.5 8.8-5.3 10.3-10.6h7c-1.2 6.5-6.1 11.3-9.6 13.3 3.5 1.6 9.1 5.8 11.2 13.6H37c-1.6-5.1-5.7-9-11.2-9.6v9.6h-1.1z"/></svg>
+            </span>
+            <span class="vk-button-label">Продолжить с VK</span><span aria-hidden="true">→</span>
+        </a>
         <p th:if="${vkEnabled}" class="auth-divider"><span>или</span></p>
         <form th:action="@{/login}" method="post" class="stack-form">
             <label>Логин или email<input name="username" autocomplete="username" required autofocus placeholder="your_login или email"></label>

@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
@@ -111,6 +112,7 @@ public class VkAuthService {
     public Optional<ExternalIdentity> findIdentity(String subject) { return identities.findByProviderAndProviderSubject(PROVIDER, subject); }
     public Optional<ExternalIdentity> findVkIdentity(User user) { return identities.findByUserIdAndProvider(user.getId(), PROVIDER); }
 
+    @Transactional
     public ExternalIdentity link(User user, VkProfile profile) {
         return identities.findByProviderAndProviderSubject(PROVIDER, profile.subject()).map(existing -> {
             if (!existing.getUser().getId().equals(user.getId())) throw new IllegalArgumentException("Этот VK ID уже привязан к другому аккаунту");
@@ -118,19 +120,27 @@ public class VkAuthService {
         }).orElseGet(() -> identities.save(new ExternalIdentity(user, PROVIDER, profile.subject(), profile.email())));
     }
 
-    public User createAccount(VkProfile profile, String displayName, String username, String email, Role role) {
+    @Transactional
+    public User createAccount(VkProfile profile, Role role) {
         if (findIdentity(profile.subject()).isPresent()) throw new IllegalArgumentException("Этот VK ID уже используется");
-        User user = accounts.registerFromExternalIdentity(displayName, username, email, role, profile.email() != null);
+        if (profile.email() == null || profile.email().isBlank())
+            throw new IllegalArgumentException("VK не передал email. Разрешите доступ к email в VK или зарегистрируйтесь обычным способом.");
+        if (accounts.requireByIdentifierOrNull(profile.email()) != null)
+            throw new IllegalArgumentException("Эта почта уже используется в другом аккаунте");
+        User user = accounts.registerFromExternalIdentity(
+                profile.displayName(), generateUsername(profile.subject()), profile.email(), role, true);
         link(user, profile);
         return user;
     }
 
+    @Transactional
     public void unlink(User user) {
         ExternalIdentity identity = findVkIdentity(user).orElseThrow(() -> new IllegalArgumentException("VK не привязан"));
         if (!user.hasPassword()) throw new IllegalArgumentException("Сначала создайте пароль — VK остаётся единственным способом входа");
         identities.delete(identity);
     }
 
+    @Transactional
     public void recordLogin(ExternalIdentity identity) { identity.recordLogin(); identities.save(identity); }
 
     public VkProfile pending(HttpSession session) {
@@ -141,6 +151,17 @@ public class VkAuthService {
 
     private String randomUrl(int bytes) { byte[] value = new byte[bytes]; random.nextBytes(value); return Base64.getUrlEncoder().withoutPadding().encodeToString(value); }
     private String sha256(String value) { try { return Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.US_ASCII))); } catch (Exception ex) { throw new IllegalStateException(ex); } }
+    private String generateUsername(String subject) {
+        String base = "vk_" + sha256(subject).replace("-", "").replace("_", "")
+                .substring(0, 12).toLowerCase();
+        if (accounts.requireByIdentifierOrNull(base) == null) return base;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String candidate = base + "_" + randomUrl(4).replace("-", "").replace("_", "")
+                    .substring(0, 5).toLowerCase();
+            if (accounts.requireByIdentifierOrNull(candidate) == null) return candidate;
+        }
+        throw new IllegalStateException("Не удалось создать уникальный логин");
+    }
     private String text(JsonNode node, String... names) {
         if (node == null) return null;
         for (String name : names) { JsonNode value = node.path(name); if (!value.isMissingNode() && !value.isNull() && !value.asText().isBlank()) return value.asText(); }

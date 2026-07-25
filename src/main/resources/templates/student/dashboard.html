@@ -6,7 +6,7 @@
 <main class="page container">
     <div th:if="${param.welcome}" class="alert success">Аккаунт создан. Теперь подключитесь к преподавателю.</div>
     <div th:if="${success}" class="alert success" th:text="${success}"></div><div th:if="${error}" class="alert error" th:text="${error}"></div>
-    <header class="page-header"><div><p class="eyebrow">Кабинет ученика</p><h1>Привет, <span th:text="${user.displayName}">Ученик</span>!</h1><p th:text="${accepted} ? 'Здесь ваше расписание, домашние задания и материалы.' : 'Подключитесь к преподавателю, чтобы увидеть занятия.'"></p></div></header>
+    <header class="page-header"><div><p class="eyebrow">Кабинет ученика</p><h1 th:text="'Привет, ' + ${user.displayName} + '!'">Привет, ученик!</h1><p th:text="${accepted} ? 'Здесь ваше расписание, домашние задания и материалы.' : 'Подключитесь к преподавателю, чтобы увидеть занятия.'"></p></div></header>
 
     <section th:if="${!accepted}" class="connect-card panel">
         <div class="connect-visual"><span>&gt;_</span></div>

@@ -103,12 +103,21 @@ public class AuthController {
             }
             var existing = vk.findIdentity(profile.subject());
             if (existing.isPresent()) {
-                vk.recordLogin(existing.get()); authenticate(existing.get().getUser(), request);
-                attempts.loginSucceeded(existing.get().getUser().getUsername()); vk.clearPending(request.getSession());
-                return homeFor(existing.get().getUser());
+                User user = existing.get().getUser();
+                if (!user.isEnabled()) throw new IllegalArgumentException("Аккаунт отключён");
+                vk.recordLogin(existing.get()); authenticate(user, request);
+                attempts.loginSucceeded(user.getUsername()); vk.clearPending(request.getSession());
+                return homeFor(user);
             }
-            if (profile.email() != null && accounts.requireByIdentifierOrNull(profile.email()) != null)
-                return "redirect:/auth/vk/account-exists";
+            if (profile.email() == null || profile.email().isBlank()) {
+                vk.clearPending(request.getSession());
+                throw new IllegalArgumentException(
+                        "VK не передал email. Разрешите доступ к email в VK или зарегистрируйтесь обычным способом.");
+            }
+            if (accounts.requireByIdentifierOrNull(profile.email()) != null) {
+                vk.clearPending(request.getSession());
+                throw new IllegalArgumentException("Эта почта уже используется в другом аккаунте");
+            }
             return "redirect:/auth/vk/onboarding";
         } catch (IllegalArgumentException ex) { flash.addFlashAttribute("error", ex.getMessage()); return "redirect:/login"; }
     }
@@ -117,10 +126,9 @@ public class AuthController {
     String vkOnboarding(HttpSession session, Model model, RedirectAttributes flash) {
         VkAuthService.VkProfile profile = vk.pending(session);
         if (profile == null) { flash.addFlashAttribute("error", "Начните вход через VK заново"); return "redirect:/login"; }
-        VkRegistrationForm form = new VkRegistrationForm(); form.setDisplayName(profile.displayName()); form.setEmail(profile.email());
-        String safeSubject = profile.subject().replaceAll("[^A-Za-z0-9]", "");
-        form.setUsername("vk_" + (safeSubject.isBlank() ? "account" : safeSubject.substring(0, Math.min(8, safeSubject.length()))));
-        model.addAttribute("form", form); model.addAttribute("emailFromVk", profile.email() != null); return "vk-onboarding";
+        model.addAttribute("form", new VkRegistrationForm());
+        model.addAttribute("vkName", profile.displayName());
+        return "vk-onboarding";
     }
 
     @PostMapping("/auth/vk/onboarding")
@@ -128,33 +136,16 @@ public class AuthController {
                                 HttpSession session, HttpServletRequest request, Model model) {
         VkAuthService.VkProfile profile = vk.pending(session);
         if (profile == null) return "redirect:/login";
-        if (errors.hasErrors()) { model.addAttribute("emailFromVk", profile.email() != null); return "vk-onboarding"; }
+        if (errors.hasErrors()) { model.addAttribute("vkName", profile.displayName()); return "vk-onboarding"; }
         try {
-            User user = vk.createAccount(profile, form.getDisplayName(), form.getUsername(), form.getEmail(), form.getRole());
+            User user = vk.createAccount(profile, form.getRole());
             vk.clearPending(session); authenticate(user, request);
-            if (!user.isEmailVerified()) { safeSendVerification(user); return "redirect:/verify-email/pending?welcome"; }
             return homeFor(user);
-        } catch (IllegalArgumentException ex) { model.addAttribute("registrationError", ex.getMessage()); model.addAttribute("emailFromVk", true); return "vk-onboarding"; }
-    }
-
-    @GetMapping("/auth/vk/account-exists")
-    String vkAccountExists(HttpSession session, Model model, RedirectAttributes flash) {
-        if (vk.pending(session) == null) { flash.addFlashAttribute("error", "Начните вход через VK заново"); return "redirect:/login"; }
-        return "vk-account-exists";
-    }
-
-    @PostMapping("/auth/vk/account-exists")
-    String linkVkToExisting(@RequestParam String identifier, @RequestParam String password, HttpServletRequest request,
-                            HttpSession session, RedirectAttributes flash) {
-        VkAuthService.VkProfile profile = vk.pending(session);
-        if (profile == null) return "redirect:/login";
-        if (!attempts.loginAllowed(identifier, request.getRemoteAddr())) { flash.addFlashAttribute("error", "Слишком много попыток. Повторите позже."); return "redirect:/auth/vk/account-exists"; }
-        try {
-            User user = accounts.requireByIdentifier(identifier);
-            if (!accounts.matchesPassword(user, password)) throw new IllegalArgumentException("Неверные данные");
-            vk.link(user, profile); if (profile.email() != null && user.getEmail().equalsIgnoreCase(profile.email()) && !user.isEmailVerified()) user.verifyEmail();
-            attempts.loginSucceeded(user.getUsername()); vk.clearPending(session); authenticate(user, request); return homeFor(user);
-        } catch (RuntimeException ex) { attempts.loginFailed(identifier, request.getRemoteAddr()); flash.addFlashAttribute("error", "Не удалось подтвердить аккаунт"); return "redirect:/auth/vk/account-exists"; }
+        } catch (IllegalArgumentException ex) {
+            model.addAttribute("registrationError", ex.getMessage());
+            model.addAttribute("vkName", profile.displayName());
+            return "vk-onboarding";
+        }
     }
 
     @GetMapping("/account/security")
@@ -264,7 +255,8 @@ public class AuthController {
     }
 
     private void authenticate(User user, HttpServletRequest request) {
-        request.changeSessionId();
+        if (request.getSession(false) == null) request.getSession(true);
+        else request.changeSessionId();
         var details = accounts.principalFor(user);
         var auth = new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(auth);

@@ -58,7 +58,8 @@ public class AccountTokenService {
     public Optional<ResetDelivery> createPasswordReset(String identifier) {
         String normalized = identifier == null ? "" : identifier.trim().toLowerCase(Locale.ROOT);
         Optional<User> found = users.findByUsernameIgnoreCaseOrEmailIgnoreCase(normalized, normalized);
-        if (found.isEmpty() || !found.get().isEmailVerified()) return Optional.empty();
+        if (found.isEmpty() || !found.get().isEmailVerified() || !found.get().hasPassword())
+            return Optional.empty();
         User user = found.get();
         String previousHash = resetTokens.findFirstByUserIdOrderByCreatedAtDesc(user.getId())
                 .map(PasswordResetToken::getTokenHash).orElse(null);

@@ -58,6 +58,8 @@ class FullFlowIntegrationTest {
     @Autowired AccountTokenService accountTokens;
     @Autowired LoginAttemptService loginAttempts;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired VkAuthService vkAuth;
+    @Autowired ExternalIdentityRepository externalIdentities;
     private MockMvc mvc;
 
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
@@ -76,6 +78,80 @@ class FullFlowIntegrationTest {
                 .param("termsAccepted", "true").param("personalDataAccepted", "true"))
                 .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/verify-email/pending?welcome"));
         assertThat(users.findByUsernameIgnoreCase("new_student")).isPresent();
+    }
+
+    @Test
+    void vkRegistrationOnlyAsksRoleAndCreatesVkOnlyAccount() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(VkAuthService.PROFILE_SESSION, new VkAuthService.VkProfile(
+                "vk-fast-registration-1", "vk.fast.registration@example.test",
+                "Ефим Ефимов", VkAuthService.Purpose.LOGIN, null));
+
+        mvc.perform(get("/auth/vk/onboarding").session(session))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Кем вы будете пользоваться CodeClass?")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("name=\"email\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("name=\"username\""))));
+
+        var registration = mvc.perform(post("/auth/vk/onboarding").session(session).with(csrf())
+                        .param("role", "STUDENT"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/student"))
+                .andReturn();
+
+        User user = users.findByEmailIgnoreCase("vk.fast.registration@example.test").orElseThrow();
+        assertThat(user.getUsername()).startsWith("vk_");
+        assertThat(user.getDisplayName()).isEqualTo("Ефим Ефимов");
+        assertThat(user.hasPassword()).isFalse();
+        assertThat(user.isEmailVerified()).isTrue();
+        assertThat(user.hasAccepted(AccountService.TERMS_VERSION, AccountService.PRIVACY_VERSION)).isTrue();
+        assertThat(externalIdentities.findByProviderAndProviderSubject("VK", "vk-fast-registration-1")).isPresent();
+        assertThat(accountTokens.createPasswordReset(user.getEmail())).isEmpty();
+
+        MockHttpSession authenticated = (MockHttpSession) registration.getRequest().getSession(false);
+        mvc.perform(get("/student").session(authenticated))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Привет, Ефим Ефимов!")));
+
+        mvc.perform(post("/login").with(csrf())
+                        .param("username", user.getEmail()).param("password", "AnyPassword123"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?error"));
+    }
+
+    @Test
+    void vkRegistrationRejectsExistingEmailAndMissingEmailWithoutPartialAccount() {
+        accounts.register("Обычный пользователь", "ordinary_collision",
+                "shared.vk.email@example.test", "OrdinaryPassword123", Role.STUDENT, true);
+        long usersBefore = users.count();
+
+        var collision = new VkAuthService.VkProfile("vk-email-collision",
+                "shared.vk.email@example.test", "Другой пользователь", VkAuthService.Purpose.LOGIN, null);
+        assertThatThrownBy(() -> vkAuth.createAccount(collision, Role.STUDENT))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Эта почта уже используется в другом аккаунте");
+        assertThat(users.count()).isEqualTo(usersBefore);
+        assertThat(externalIdentities.findByProviderAndProviderSubject("VK", "vk-email-collision")).isEmpty();
+
+        var noEmail = new VkAuthService.VkProfile("vk-without-email", null,
+                "Пользователь без почты", VkAuthService.Purpose.LOGIN, null);
+        assertThatThrownBy(() -> vkAuth.createAccount(noEmail, Role.TEACHER))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VK не передал email");
+        assertThat(users.count()).isEqualTo(usersBefore);
+    }
+
+    @Test
+    void vkTeacherRegistrationCreatesTeacherProfileAutomatically() {
+        User teacher = vkAuth.createAccount(new VkAuthService.VkProfile(
+                "vk-teacher-registration", "vk.teacher@example.test",
+                "Новый преподаватель", VkAuthService.Purpose.LOGIN, null), Role.TEACHER);
+
+        assertThat(teacher.getRole()).isEqualTo(Role.TEACHER);
+        assertThat(teacher.hasPassword()).isFalse();
+        assertThat(profiles.requireFor(teacher).getInviteCode()).matches("T-[A-Z2-9]{8}");
+        assertThat(externalIdentities.findByProviderAndProviderSubject(
+                "VK", "vk-teacher-registration")).isPresent();
     }
 
     @Test void completeTutorWorkflowAndOwnershipProtection() throws Exception {

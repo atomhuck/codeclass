@@ -1,2 +1,28 @@
 <!doctype html>
-<html lang="ru" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{fragments :: head('Безопасность')}"></head><body><nav th:replace="~{fragments :: nav(${user}, 'security')}"></nav><main class="container narrow page"><header class="page-header"><div><p class="eyebrow">Аккаунт</p><h1>Безопасность</h1><p>Управляйте способами входа в CodeClass.</p></div></header><div th:if="${success}" class="alert success" th:text="${success}"></div><div th:if="${error}" class="alert error" th:text="${error}"></div><section class="panel stack-form"><h2>Пароль</h2><p th:if="${user.hasPassword()}">Пароль настроен. Его можно изменить через восстановление пароля.</p><p th:unless="${user.hasPassword()}">Пароль не задан: сейчас вход возможен через VK.</p><a th:unless="${user.hasPassword()}" class="button secondary" th:href="@{/forgot-password}">Создать пароль через email</a></section><section class="panel stack-form"><h2>VK ID</h2><p th:if="${vkIdentity}">VK привязан.</p><p th:unless="${vkIdentity}">VK пока не привязан.</p><a th:unless="${vkIdentity}" class="button secondary" th:href="@{/account/security/vk/link}">Привязать VK</a><form th:if="${vkIdentity}" th:action="@{/account/security/vk/unlink}" method="post" class="stack-form"><label>Подтвердите пароль<input type="password" name="password" autocomplete="current-password" required></label><button class="button danger" type="submit">Отвязать VK</button></form></section></main></body></html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Безопасность')}"></head>
+<body>
+<nav th:replace="~{fragments :: nav(${user}, 'security')}"></nav>
+<main class="container narrow page">
+    <header class="page-header"><div><p class="eyebrow">Аккаунт</p><h1>Безопасность</h1><p>Способы входа в CodeClass.</p></div></header>
+    <div th:if="${success}" class="alert success" th:text="${success}"></div>
+    <div th:if="${error}" class="alert error" th:text="${error}"></div>
+    <section class="panel stack-form">
+        <h2>Вход по логину или email</h2>
+        <p th:if="${user.hasPassword()}">Пароль настроен. Его можно изменить через восстановление пароля.</p>
+        <p th:unless="${user.hasPassword()}">Этот аккаунт создан через VK. Вход по логину, email и паролю для него недоступен.</p>
+    </section>
+    <section class="panel stack-form">
+        <h2>VK ID</h2>
+        <p th:if="${vkIdentity}">VK подключён и используется для входа.</p>
+        <p th:unless="${vkIdentity}">VK пока не подключён.</p>
+        <a th:unless="${vkIdentity}" class="button secondary" th:href="@{/account/security/vk/link}">Привязать VK</a>
+        <form th:if="${vkIdentity != null and user.hasPassword()}" th:action="@{/account/security/vk/unlink}" method="post" class="stack-form">
+            <label>Подтвердите пароль<input type="password" name="password" autocomplete="current-password" required></label>
+            <button class="button danger" type="submit">Отвязать VK</button>
+        </form>
+        <p th:if="${vkIdentity != null and !user.hasPassword()}" class="legal-note">VK нельзя отключить, потому что это единственный способ входа в аккаунт.</p>
+    </section>
+</main>
+</body>
+</html>
