@@ -29,6 +29,12 @@ spring:
       mail.smtp.timeout: 10000
       mail.smtp.writetimeout: 10000
 server:
+  servlet:
+    session:
+      # Сессия переживает закрытие браузера и истекает после 30 дней бездействия.
+      timeout: 30d
+      cookie:
+        max-age: 30d
   error:
     include-message: never
 management:
