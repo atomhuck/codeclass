@@ -18,10 +18,8 @@
         <div th:if="${param.error}" class="alert error">Неверный логин или пароль</div>
         <div th:if="${param.rate}" class="alert error">Слишком много попыток. Повторите вход через 15 минут.</div>
         <div th:if="${param.logout}" class="alert success">Вы вышли из аккаунта</div>
-        <div th:if="${param.verified}" class="alert success">Email подтверждён. Теперь можно войти.</div>
         <div th:if="${param.reset}" class="alert success">Пароль изменён. Войдите с новым паролем.</div>
         <div th:if="${param.passwordChanged}" class="alert success">Пароль был изменён. Войдите снова.</div>
-        <div th:if="${param.invalidToken}" class="alert error">Ссылка недействительна или устарела.</div>
         <form th:action="@{/login}" method="post" class="stack-form">
             <label>Логин или email<input name="username" autocomplete="username" required autofocus placeholder="your_login или email"></label>
             <label>Пароль<input type="password" name="password" autocomplete="current-password" required placeholder="••••••••"></label>

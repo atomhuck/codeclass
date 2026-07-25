@@ -17,6 +17,8 @@ public class LoginAttemptService {
     private final Map<String, Deque<Instant>> loginByIp = new ConcurrentHashMap<>();
     private final Map<String, Deque<Instant>> resetByIp = new ConcurrentHashMap<>();
     private final Map<String, Deque<Instant>> resetByAccount = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Instant>> verificationByIp = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Instant>> verificationByAccount = new ConcurrentHashMap<>();
 
     public LoginAttemptService(AccountService accounts) { this.accounts = accounts; }
 
@@ -41,6 +43,15 @@ public class LoginAttemptService {
                 || count(resetByAccount, account, Duration.ofHours(1)) >= 5) return false;
         add(resetByIp, ip, Duration.ofHours(1));
         add(resetByAccount, account, Duration.ofHours(1));
+        return true;
+    }
+
+    public boolean verificationResendAllowed(String username, String ip) {
+        String account = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+        if (count(verificationByIp, ip, Duration.ofHours(1)) >= 10
+                || count(verificationByAccount, account, Duration.ofHours(1)) >= 5) return false;
+        add(verificationByIp, ip, Duration.ofHours(1));
+        add(verificationByAccount, account, Duration.ofHours(1));
         return true;
     }
 

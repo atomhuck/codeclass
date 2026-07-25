@@ -18,6 +18,7 @@ import ru.tutor.codeclass.web.form.RegistrationForm;
 
 @Controller
 public class AuthController {
+    private static final String RESET_IDENTIFIER_SESSION = "passwordResetIdentifier";
     private final AccountService accounts;
     private final AccountTokenService tokens;
     private final NotificationMailService mail;
@@ -67,8 +68,9 @@ public class AuthController {
         }
         try {
             User user = current(auth);
-            accounts.completeLegacyProfile(user, email);
-            safeSendVerification(user);
+            User updated = accounts.completeLegacyProfile(user, email);
+            if (updated.isEmailVerified()) return homeFor(updated);
+            safeSendVerification(updated);
             return "redirect:/verify-email/pending";
         } catch (IllegalArgumentException ex) {
             flash.addFlashAttribute("error", ex.getMessage());
@@ -77,21 +79,38 @@ public class AuthController {
     }
 
     @GetMapping("/verify-email")
-    String verify(@RequestParam(required = false) String token) {
-        return tokens.verifyEmail(token) ? "redirect:/login?verified" : "redirect:/login?invalidToken";
+    String legacyVerificationLink(RedirectAttributes flash) {
+        flash.addFlashAttribute("error", "Подтверждение по ссылке больше не используется. Введите код из нового письма.");
+        return "redirect:/verify-email/pending";
     }
 
     @GetMapping("/verify-email/pending")
     String verificationPending(Authentication auth, Model model) {
-        model.addAttribute("user", current(auth));
+        User user = current(auth);
+        if (user.isEmailVerified()) return homeFor(user);
+        model.addAttribute("user", user);
         return "verify-email-pending";
     }
 
+    @PostMapping("/verify-email")
+    String verify(Authentication auth, @RequestParam String code, RedirectAttributes flash) {
+        User user = current(auth);
+        if (tokens.verifyEmail(user, code)) return homeFor(user);
+        flash.addFlashAttribute("error",
+                "Неверный или просроченный код. После пяти ошибок запросите новый код.");
+        return "redirect:/verify-email/pending";
+    }
+
     @PostMapping("/verify-email/resend")
-    String resend(Authentication auth, RedirectAttributes flash) {
+    String resend(Authentication auth, HttpServletRequest request, RedirectAttributes flash) {
+        User user = current(auth);
+        if (!attempts.verificationResendAllowed(user.getUsername(), request.getRemoteAddr())) {
+            flash.addFlashAttribute("error", "Слишком много запросов. Попробуйте получить новый код позже.");
+            return "redirect:/verify-email/pending";
+        }
         try {
-            sendVerification(current(auth));
-            flash.addFlashAttribute("success", "Новое письмо отправлено");
+            sendVerification(user);
+            flash.addFlashAttribute("success", "Новый шестизначный код отправлен");
         } catch (MailException ex) {
             flash.addFlashAttribute("error", "Не удалось отправить письмо. Попробуйте позже");
         }
@@ -102,38 +121,46 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     String forgot(@RequestParam String identifier, HttpServletRequest request, RedirectAttributes flash) {
+        String normalizedIdentifier = identifier == null ? "" : identifier.trim();
+        request.getSession(true).setAttribute(RESET_IDENTIFIER_SESSION, normalizedIdentifier);
         if (attempts.passwordResetAllowed(identifier, request.getRemoteAddr())) {
             tokens.createPasswordReset(identifier).ifPresent(delivery -> {
-                try { mail.sendPasswordReset(delivery.email(), delivery.token()); }
+                try { mail.sendPasswordReset(delivery.email(), delivery.code()); }
                 catch (MailException ignored) { /* одинаковый ответ не раскрывает наличие аккаунта */ }
             });
         }
         flash.addFlashAttribute("success",
-                "Если аккаунт существует и email подтверждён, мы отправили ссылку для сброса");
-        return "redirect:/forgot-password";
+                "Если аккаунт существует и email подтверждён, мы отправили шестизначный код");
+        return "redirect:/reset-password?requested";
     }
 
     @GetMapping("/reset-password")
-    String reset(@RequestParam(required = false) String token, Model model) {
-        model.addAttribute("token", token); return "reset-password";
+    String reset(HttpSession session, Model model) {
+        Object identifier = session.getAttribute(RESET_IDENTIFIER_SESSION);
+        model.addAttribute("identifier", identifier == null ? "" : identifier);
+        return "reset-password";
     }
 
     @PostMapping("/reset-password")
-    String reset(@RequestParam String token, @RequestParam String password,
-                 @RequestParam String passwordConfirmation, RedirectAttributes flash) {
+    String reset(@RequestParam String identifier, @RequestParam String code,
+                 @RequestParam String password, @RequestParam String passwordConfirmation,
+                 HttpSession session, RedirectAttributes flash) {
+        session.setAttribute(RESET_IDENTIFIER_SESSION, identifier == null ? "" : identifier.trim());
         if (!password.equals(passwordConfirmation)) {
             flash.addFlashAttribute("error", "Пароли не совпадают");
-            return "redirect:/reset-password?token=" + token;
+            return "redirect:/reset-password";
         }
         try {
-            if (!tokens.resetPassword(token, password)) {
-                flash.addFlashAttribute("error", "Ссылка недействительна или устарела");
-                return "redirect:/reset-password?token=" + token;
+            if (!tokens.resetPassword(identifier, code, password)) {
+                flash.addFlashAttribute("error",
+                        "Неверный или просроченный код. После пяти ошибок запросите новый код.");
+                return "redirect:/reset-password";
             }
+            session.removeAttribute(RESET_IDENTIFIER_SESSION);
             return "redirect:/login?reset";
         } catch (IllegalArgumentException ex) {
             flash.addFlashAttribute("error", ex.getMessage());
-            return "redirect:/reset-password?token=" + token;
+            return "redirect:/reset-password";
         }
     }
 
@@ -155,4 +182,8 @@ public class AuthController {
     }
 
     private User current(Authentication auth) { return accounts.requireByUsername(auth.getName()); }
+
+    private String homeFor(User user) {
+        return user.getRole() == Role.TEACHER ? "redirect:/teacher" : "redirect:/student";
+    }
 }

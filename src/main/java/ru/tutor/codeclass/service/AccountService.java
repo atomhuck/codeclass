@@ -80,14 +80,17 @@ public class AccountService implements UserDetailsService {
     }
 
     @Transactional
-    public void completeLegacyProfile(User user, String email) {
+    public User completeLegacyProfile(User user, String email) {
         String normalizedEmail = normalize(email);
         if (normalizedEmail.length() > 254 || !EMAIL.matcher(normalizedEmail).matches())
             throw new IllegalArgumentException("Введите корректный email");
         users.findByEmailIgnoreCase(normalizedEmail).filter(found -> !found.getId().equals(user.getId()))
                 .ifPresent(found -> { throw new IllegalArgumentException("Email уже используется"); });
-        user.setEmail(normalizedEmail);
-        user.acceptLegal(TERMS_VERSION, PRIVACY_VERSION);
+        User managed = users.findById(user.getId())
+                .orElseThrow(() -> new UsernameNotFoundException("Пользователь не найден"));
+        managed.setEmail(normalizedEmail);
+        managed.acceptLegal(TERMS_VERSION, PRIVACY_VERSION);
+        return managed;
     }
 
     @Transactional(readOnly = true)

@@ -3,6 +3,7 @@ package ru.tutor.codeclass;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -42,7 +43,7 @@ class FullFlowIntegrationTest {
         registry.add("app.teacher.password", () -> "secure-password");
         registry.add("app.teacher.name", () -> "Иван Петрович");
         registry.add("app.teacher.code", () -> "teacher_code");
-        registry.add("app.account-gate-enabled", () -> "false");
+        registry.add("app.account-gate-enabled", () -> "true");
     }
 
     @Autowired WebApplicationContext context;
@@ -197,18 +198,157 @@ class FullFlowIntegrationTest {
         assertThat(user.getPasswordHash()).isNotEqualTo("InitialPassword123");
 
         String verification = accountTokens.createVerification(user);
-        assertThat(accountTokens.verifyEmail(verification)).isTrue();
-        assertThat(accountTokens.verifyEmail(verification)).isFalse();
+        assertThat(verification).matches("\\d{6}");
+        assertThat(accountTokens.verifyEmail(user, verification)).isTrue();
+        assertThat(accountTokens.verifyEmail(user, verification)).isFalse();
         assertThat(accounts.requireByUsername("security_student").isEmailVerified()).isTrue();
 
         var delivery = accountTokens.createPasswordReset("SECURITY.STUDENT@EXAMPLE.TEST").orElseThrow();
-        assertThat(accountTokens.resetPassword(delivery.token(), "ChangedPassword123")).isTrue();
-        assertThat(accountTokens.resetPassword(delivery.token(), "AnotherPassword123")).isFalse();
+        assertThat(delivery.code()).matches("\\d{6}");
+        assertThat(accountTokens.resetPassword("security_student", delivery.code(), "ChangedPassword123")).isTrue();
+        assertThat(accountTokens.resetPassword("security_student", delivery.code(), "AnotherPassword123")).isFalse();
         User changed = accounts.requireByUsername("security_student");
         assertThat(passwordEncoder.matches("ChangedPassword123", changed.getPasswordHash())).isTrue();
         assertThat(changed.getAuthVersion()).isEqualTo(1);
 
         for (int i = 0; i < 5; i++) loginAttempts.loginFailed("security_student", "192.0.2.10");
         assertThat(loginAttempts.loginAllowed("security_student", "192.0.2.10")).isFalse();
+
+        for (int i = 0; i < 5; i++) {
+            assertThat(loginAttempts.verificationResendAllowed("security_student", "192.0.2.20")).isTrue();
+        }
+        assertThat(loginAttempts.verificationResendAllowed("security_student", "192.0.2.20")).isFalse();
+    }
+
+    @Test
+    void legacyAccountCompletionPersistsAcrossLogoutAndFinishesWithCode() throws Exception {
+        User legacy = accounts.registerStudent("Старый пользователь", "legacy_auth_flow", "LegacyPassword123");
+
+        var firstLogin = mvc.perform(post("/login").with(csrf())
+                        .param("username", "legacy_auth_flow").param("password", "LegacyPassword123"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/account/consent"))
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) firstLogin.getRequest().getSession(false);
+
+        mvc.perform(post("/account/consent").session(session).with(csrf())
+                        .param("email", "legacy.auth@example.test")
+                        .param("termsAccepted", "true")
+                        .param("personalDataAccepted", "true"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/verify-email/pending"));
+
+        User completed = accounts.requireByUsername("legacy_auth_flow");
+        assertThat(completed.getEmail()).isEqualTo("legacy.auth@example.test");
+        assertThat(completed.hasAccepted(AccountService.TERMS_VERSION, AccountService.PRIVACY_VERSION)).isTrue();
+        assertThat(completed.isEmailVerified()).isFalse();
+        String code = accountTokens.createVerification(completed);
+
+        mvc.perform(post("/logout").session(session).with(csrf()))
+                .andExpect(status().is3xxRedirection());
+
+        var secondLogin = mvc.perform(post("/login").with(csrf())
+                        .param("username", "LEGACY.AUTH@EXAMPLE.TEST").param("password", "LegacyPassword123"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/verify-email/pending"))
+                .andReturn();
+        MockHttpSession resumedSession = (MockHttpSession) secondLogin.getRequest().getSession(false);
+
+        mvc.perform(post("/verify-email").session(resumedSession).with(csrf()).param("code", code))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/student"));
+        assertThat(accounts.requireByUsername("legacy_auth_flow").isEmailVerified()).isTrue();
+
+        mvc.perform(post("/logout").session(resumedSession).with(csrf()))
+                .andExpect(status().is3xxRedirection());
+        mvc.perform(post("/login").with(csrf())
+                        .param("username", "legacy_auth_flow").param("password", "LegacyPassword123"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/student"));
+    }
+
+    @Test
+    void newRegistrationCanBeInterruptedAndResumedAtEmailCodeStep() throws Exception {
+        var registration = mvc.perform(post("/register").with(csrf())
+                        .param("displayName", "Новый пользователь")
+                        .param("username", "interrupted_registration")
+                        .param("email", "interrupted@example.test")
+                        .param("password", "RegistrationPassword123")
+                        .param("passwordConfirmation", "RegistrationPassword123")
+                        .param("role", "STUDENT")
+                        .param("termsAccepted", "true")
+                        .param("personalDataAccepted", "true"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/verify-email/pending?welcome"))
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) registration.getRequest().getSession(false);
+        User user = accounts.requireByUsername("interrupted_registration");
+        String code = accountTokens.createVerification(user);
+
+        mvc.perform(post("/logout").session(session).with(csrf()))
+                .andExpect(status().is3xxRedirection());
+        var login = mvc.perform(post("/login").with(csrf())
+                        .param("username", "interrupted_registration")
+                        .param("password", "RegistrationPassword123"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/verify-email/pending"))
+                .andReturn();
+        MockHttpSession resumed = (MockHttpSession) login.getRequest().getSession(false);
+        mvc.perform(post("/verify-email").session(resumed).with(csrf()).param("code", code))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/student"));
+    }
+
+    @Test
+    void verificationCodeIsSixDigitsOneTimeAndLocksAfterFiveFailures() {
+        User user = accounts.register("Проверка кода", "verification_code_limits",
+                "verification.code@example.test", "VerificationPassword123", Role.STUDENT, true);
+        String firstCode = accountTokens.createVerification(user);
+        assertThat(firstCode).matches("\\d{6}");
+        for (int attempt = 0; attempt < 5; attempt++) {
+            assertThat(accountTokens.verifyEmail(user, "999999".equals(firstCode) ? "888888" : "999999")).isFalse();
+        }
+        assertThat(accountTokens.verifyEmail(user, firstCode)).isFalse();
+
+        String replacementCode = accountTokens.createVerification(user);
+        assertThat(replacementCode).matches("\\d{6}").isNotEqualTo(firstCode);
+        assertThat(accountTokens.verifyEmail(user, replacementCode)).isTrue();
+        assertThat(accountTokens.verifyEmail(user, replacementCode)).isFalse();
+    }
+
+    @Test
+    void passwordResetUsesIdentifierAndSixDigitOneTimeCode() throws Exception {
+        User user = accounts.register("Сброс пароля", "password_reset_code",
+                "password.reset@example.test", "OriginalPassword123", Role.STUDENT, true);
+        String verificationCode = accountTokens.createVerification(user);
+        assertThat(accountTokens.verifyEmail(user, verificationCode)).isTrue();
+
+        var request = mvc.perform(post("/forgot-password").with(csrf())
+                        .param("identifier", "PASSWORD.RESET@EXAMPLE.TEST"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reset-password?requested"))
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) request.getRequest().getSession(false);
+        String resetCode = accountTokens.createPasswordReset("password_reset_code").orElseThrow().code();
+
+        mvc.perform(post("/reset-password").session(session).with(csrf())
+                        .param("identifier", "password_reset_code")
+                        .param("code", resetCode)
+                        .param("password", "ChangedPassword123")
+                        .param("passwordConfirmation", "DifferentPassword123"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reset-password"));
+
+        mvc.perform(post("/reset-password").session(session).with(csrf())
+                        .param("identifier", "password_reset_code")
+                        .param("code", resetCode)
+                        .param("password", "ChangedPassword123")
+                        .param("passwordConfirmation", "ChangedPassword123"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?reset"));
+
+        User changed = accounts.requireByUsername("password_reset_code");
+        assertThat(passwordEncoder.matches("ChangedPassword123", changed.getPasswordHash())).isTrue();
+        assertThat(accountTokens.resetPassword("password_reset_code", resetCode, "AnotherPassword123")).isFalse();
     }
 }

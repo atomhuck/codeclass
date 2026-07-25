@@ -14,34 +14,31 @@ public class NotificationMailService {
     private final boolean enabled;
     private final String from;
     private final String replyTo;
-    private final String baseUrl;
 
     public NotificationMailService(JavaMailSender sender,
             @Value("${app.mail.enabled:false}") boolean enabled,
             @Value("${app.mail.from:no-reply@repethelper.ru}") String from,
-            @Value("${app.mail.reply-to:efimok05@gmail.com}") String replyTo,
-            @Value("${app.base-url:http://localhost:8080}") String baseUrl) {
+            @Value("${app.mail.reply-to:efimok05@gmail.com}") String replyTo) {
         this.sender = sender; this.enabled = enabled; this.from = from; this.replyTo = replyTo;
-        this.baseUrl = baseUrl.replaceAll("/+$", "");
     }
 
-    public void sendVerification(String email, String token) {
-        String url = baseUrl + "/verify-email?token=" + token;
+    public void sendVerification(String email, String code) {
         send(email, "Подтвердите email в CodeClass",
-                "Здравствуйте!\n\nПодтвердите email, перейдя по ссылке:\n" + url
-                        + "\n\nСсылка действует 24 часа. Если это были не вы, просто проигнорируйте письмо.", url);
+                "Здравствуйте!\n\nВаш код подтверждения CodeClass:\n\n" + code
+                        + "\n\nКод действует 15 минут и может быть использован один раз."
+                        + "\nЕсли это были не вы, просто проигнорируйте письмо.");
     }
 
-    public void sendPasswordReset(String email, String token) {
-        String url = baseUrl + "/reset-password?token=" + token;
+    public void sendPasswordReset(String email, String code) {
         send(email, "Сброс пароля CodeClass",
-                "Для создания нового пароля перейдите по ссылке:\n" + url
-                        + "\n\nСсылка действует 30 минут и может быть использована один раз.", url);
+                "Ваш код для создания нового пароля:\n\n" + code
+                        + "\n\nКод действует 15 минут и может быть использован один раз."
+                        + "\nЕсли вы не запрашивали сброс пароля, просто проигнорируйте письмо.");
     }
 
-    private void send(String email, String subject, String body, String developmentUrl) {
+    private void send(String email, String subject, String body) {
         if (!enabled) {
-            log.info("Отправка почты отключена. Ссылка для локальной разработки: {}", developmentUrl);
+            log.info("Отправка почты отключена; письмо не отправлено");
             return;
         }
         SimpleMailMessage message = new SimpleMailMessage();

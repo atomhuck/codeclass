@@ -21,7 +21,7 @@ public class SecurityConfig {
                                              @Value("${app.account-gate-enabled:true}") boolean accountGateEnabled) throws Exception {
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/css/**", "/js/**", "/vendor/**", "/login", "/register",
-                        "/forgot-password", "/reset-password", "/verify-email",
+                        "/forgot-password", "/reset-password",
                         "/legal/**", "/error", "/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/teacher/**").hasRole("TEACHER")
                 .requestMatchers("/student/**").hasRole("STUDENT")

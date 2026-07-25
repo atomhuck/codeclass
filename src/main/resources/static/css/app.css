@@ -98,6 +98,7 @@ h2 { margin-bottom: .4rem; font-size: 1.25rem; letter-spacing: -.025em; }
 input,select,textarea { width: 100%; border: 1px solid #29354a; border-radius: 10px; outline: none; color: var(--text); background: #0b101b; }
 input,select { height: 44px; padding: 0 13px; } textarea { padding: 14px; resize: vertical; line-height: 1.65; }
 input:focus,select:focus,textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(69,216,255,.08); }
+.code-input { text-align: center; font: 700 1.35rem "JetBrains Mono", monospace; letter-spacing: .42em; padding-left: calc(13px + .42em); }
 label small { color: var(--danger); font-weight: 400; }
 details.popover { position: relative; }.popover > summary::-webkit-details-marker { display:none; }
 .popover-panel { position: absolute; z-index: 10; right: 0; top: calc(100% + 9px); width: 330px; padding: 20px; }

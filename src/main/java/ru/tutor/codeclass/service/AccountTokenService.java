@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.tutor.codeclass.domain.*;
 import ru.tutor.codeclass.repository.*;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -27,19 +27,28 @@ public class AccountTokenService {
 
     @Transactional
     public String createVerification(User user) {
-        if (user.getEmail() == null) throw new IllegalArgumentException("Сначала укажите email");
-        verificationTokens.deleteByUserId(user.getId());
-        String raw = randomToken();
-        verificationTokens.save(new EmailVerificationToken(user, digest(raw),
-                Instant.now().plus(24, ChronoUnit.HOURS)));
-        return raw;
+        User managed = users.findById(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
+        if (managed.getEmail() == null) throw new IllegalArgumentException("Сначала укажите email");
+        String previousHash = verificationTokens.findFirstByUserIdOrderByCreatedAtDesc(managed.getId())
+                .map(EmailVerificationToken::getTokenHash).orElse(null);
+        String code = newCode(previousHash);
+        verificationTokens.deleteByUserId(managed.getId());
+        verificationTokens.save(new EmailVerificationToken(managed, encoder.encode(code),
+                Instant.now().plus(15, ChronoUnit.MINUTES)));
+        return code;
     }
 
     @Transactional
-    public boolean verifyEmail(String rawToken) {
-        if (rawToken == null || rawToken.isBlank()) return false;
-        EmailVerificationToken token = verificationTokens.findByTokenHash(digest(rawToken)).orElse(null);
+    public boolean verifyEmail(User user, String code) {
+        if (!validCode(code)) return false;
+        EmailVerificationToken token = verificationTokens
+                .findFirstByUserIdOrderByCreatedAtDesc(user.getId()).orElse(null);
         if (token == null || !token.isUsable(Instant.now())) return false;
+        if (!encoder.matches(code.trim(), token.getTokenHash())) {
+            token.recordFailure();
+            return false;
+        }
         token.use();
         token.getUser().verifyEmail();
         return true;
@@ -51,17 +60,28 @@ public class AccountTokenService {
         Optional<User> found = users.findByUsernameIgnoreCaseOrEmailIgnoreCase(normalized, normalized);
         if (found.isEmpty() || !found.get().isEmailVerified()) return Optional.empty();
         User user = found.get();
+        String previousHash = resetTokens.findFirstByUserIdOrderByCreatedAtDesc(user.getId())
+                .map(PasswordResetToken::getTokenHash).orElse(null);
+        String code = newCode(previousHash);
         resetTokens.deleteByUserId(user.getId());
-        String raw = randomToken();
-        resetTokens.save(new PasswordResetToken(user, digest(raw), Instant.now().plus(30, ChronoUnit.MINUTES)));
-        return Optional.of(new ResetDelivery(user.getEmail(), raw));
+        resetTokens.save(new PasswordResetToken(user, encoder.encode(code),
+                Instant.now().plus(15, ChronoUnit.MINUTES)));
+        return Optional.of(new ResetDelivery(user.getEmail(), code));
     }
 
     @Transactional
-    public boolean resetPassword(String rawToken, String password) {
-        if (rawToken == null || rawToken.isBlank()) return false;
-        PasswordResetToken token = resetTokens.findByTokenHash(digest(rawToken)).orElse(null);
+    public boolean resetPassword(String identifier, String code, String password) {
+        if (!validCode(code)) return false;
+        String normalized = identifier == null ? "" : identifier.trim().toLowerCase(Locale.ROOT);
+        User user = users.findByUsernameIgnoreCaseOrEmailIgnoreCase(normalized, normalized).orElse(null);
+        if (user == null) return false;
+        PasswordResetToken token = resetTokens
+                .findFirstByUserIdOrderByCreatedAtDesc(user.getId()).orElse(null);
         if (token == null || !token.isUsable(Instant.now())) return false;
+        if (!encoder.matches(code.trim(), token.getTokenHash())) {
+            token.recordFailure();
+            return false;
+        }
         if (password == null || password.length() < 10
                 || password.getBytes(StandardCharsets.UTF_8).length > 72)
             throw new IllegalArgumentException("Пароль должен содержать не менее 10 символов и не более 72 байт");
@@ -70,21 +90,17 @@ public class AccountTokenService {
         return true;
     }
 
-    private String randomToken() {
-        byte[] bytes = new byte[32];
-        random.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private String digest(String token) {
-        try {
-            byte[] bytes = MessageDigest.getInstance("SHA-256")
-                    .digest(token.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 недоступен", ex);
+    private String newCode(String previousHash) {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String code = String.format(Locale.ROOT, "%06d", random.nextInt(1_000_000));
+            if (previousHash == null || !encoder.matches(code, previousHash)) return code;
         }
+        throw new IllegalStateException("Не удалось создать одноразовый код");
     }
 
-    public record ResetDelivery(String email, String token) {}
+    private boolean validCode(String code) {
+        return code != null && code.trim().matches("\\d{6}");
+    }
+
+    public record ResetDelivery(String email, String code) {}
 }

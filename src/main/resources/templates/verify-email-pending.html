@@ -4,10 +4,22 @@
 <body class="auth-page"><main class="auth-shell compact-auth">
     <section class="auth-card">
         <a class="brand" th:href="@{/login}"><span class="brand-mark">&gt;_</span><span>CodeClass</span></a>
-        <div><p class="eyebrow">Почти готово</p><h1>Подтвердите email</h1><p class="lead">Мы отправили ссылку на <b th:text="${user.email}">email</b>. Она действует 24 часа.</p></div>
+        <div>
+            <p class="eyebrow">Почти готово</p>
+            <h1>Введите код из письма</h1>
+            <p class="lead">Мы отправили шестизначный код на <b th:text="${user.email}">email</b>. Код действует 15 минут.</p>
+        </div>
         <div th:if="${success}" class="alert success" th:text="${success}"></div>
         <div th:if="${error}" class="alert error" th:text="${error}"></div>
-        <form th:action="@{/verify-email/resend}" method="post"><button class="button secondary full">Отправить письмо ещё раз</button></form>
+        <form th:action="@{/verify-email}" method="post" class="stack-form">
+            <label>Код подтверждения
+                <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]{6}"
+                       minlength="6" maxlength="6" autocomplete="one-time-code"
+                       placeholder="000000" required autofocus>
+            </label>
+            <button class="button primary full">Подтвердить email <span>→</span></button>
+        </form>
+        <form th:action="@{/verify-email/resend}" method="post"><button class="button secondary full">Получить новый код</button></form>
         <form th:action="@{/logout}" method="post"><button class="button ghost full">Выйти</button></form>
     </section>
 </main></body></html>
