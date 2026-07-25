@@ -46,6 +46,8 @@ public class AccountStateFilter extends OncePerRequestFilter {
                 || path.startsWith("/legal/") || path.equals("/account/consent")
                 || path.startsWith("/verify-email") || path.equals("/forgot-password")
                 || path.equals("/reset-password") || path.equals("/login")
-                || path.equals("/register") || path.equals("/error") || path.equals("/logout");
+                || path.equals("/register") || path.startsWith("/oauth2/") || path.startsWith("/login/oauth2/")
+                || path.startsWith("/auth/vk/") || path.equals("/account/security")
+                || path.equals("/error") || path.equals("/logout");
     }
 }

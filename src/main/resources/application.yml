@@ -53,6 +53,14 @@ app:
     enabled: ${APP_MAIL_ENABLED:false}
     from: ${APP_MAIL_FROM:no-reply@repethelper.ru}
     reply-to: ${APP_MAIL_REPLY_TO:efimok05@gmail.com}
+  vk:
+    enabled: ${APP_VK_AUTH_ENABLED:false}
+    client-id: ${VK_CLIENT_ID:}
+    client-secret: ${VK_CLIENT_SECRET:}
+    redirect-uri: ${VK_REDIRECT_URI:${app.base-url}/login/oauth2/code/vk}
+    authorize-url: ${VK_AUTHORIZE_URL:https://id.vk.com/authorize}
+    token-url: ${VK_TOKEN_URL:https://id.vk.com/oauth2/auth}
+    user-info-url: ${VK_USER_INFO_URL:https://id.vk.com/oauth2/user_info}
   legal:
     operator-name: ${APP_LEGAL_OPERATOR_NAME:Ефимов Ефим Александрович}
     status: ${APP_LEGAL_STATUS:самозанятый}

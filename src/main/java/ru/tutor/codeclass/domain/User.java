@@ -10,7 +10,7 @@ public class User {
     private Long id;
     @Column(nullable = false, unique = true, length = 40)
     private String username;
-    @Column(name = "password_hash", nullable = false, length = 100)
+    @Column(name = "password_hash", length = 100)
     private String passwordHash;
     @Column(length = 254)
     private String email;
@@ -103,4 +103,6 @@ public class User {
         this.authVersion++;
         clearLoginFailures();
     }
+    public void invalidateSessions() { this.authVersion++; }
+    public boolean hasPassword() { return passwordHash != null && !passwordHash.isBlank(); }
 }

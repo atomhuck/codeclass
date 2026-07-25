@@ -20,6 +20,9 @@
         <div th:if="${param.logout}" class="alert success">Вы вышли из аккаунта</div>
         <div th:if="${param.reset}" class="alert success">Пароль изменён. Войдите с новым паролем.</div>
         <div th:if="${param.passwordChanged}" class="alert success">Пароль был изменён. Войдите снова.</div>
+        <div th:if="${error}" class="alert error" th:text="${error}"></div>
+        <a th:if="${vkEnabled}" class="button secondary full vk-button" th:href="@{/oauth2/authorization/vk}">Продолжить с VK</a>
+        <p th:if="${vkEnabled}" class="auth-divider"><span>или</span></p>
         <form th:action="@{/login}" method="post" class="stack-form">
             <label>Логин или email<input name="username" autocomplete="username" required autofocus placeholder="your_login или email"></label>
             <label>Пароль<input type="password" name="password" autocomplete="current-password" required placeholder="••••••••"></label>

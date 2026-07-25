@@ -34,8 +34,12 @@ public class AccountService implements UserDetailsService {
 
     @Override @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String identifier) throws UsernameNotFoundException {
-        return CodeClassPrincipal.from(requireByIdentifier(identifier));
+        User user = requireByIdentifier(identifier);
+        if (!user.hasPassword()) throw new UsernameNotFoundException("Password sign-in is not configured");
+        return CodeClassPrincipal.from(user);
     }
+
+    public CodeClassPrincipal principalFor(User user) { return CodeClassPrincipal.from(user); }
 
     @Transactional
     public User registerStudent(String displayName, String username, String password) {
@@ -61,6 +65,20 @@ public class AccountService implements UserDetailsService {
             throw new IllegalArgumentException("Email уже используется");
         User user = new User(normalizedUsername, normalizedEmail, encoder.encode(password), displayName.trim(), role);
         if (legalAccepted) user.acceptLegal(TERMS_VERSION, PRIVACY_VERSION);
+        user = users.save(user);
+        if (role == Role.TEACHER) profiles.save(new TeacherProfile(user, generateInviteCode()));
+        return user;
+    }
+
+    @Transactional
+    public User registerFromExternalIdentity(String displayName, String username, String email,
+                                             Role role, boolean emailVerified) {
+        String normalizedUsername = normalize(username);
+        String normalizedEmail = normalize(email);
+        validateRegistrationFields(displayName, normalizedUsername, normalizedEmail, role);
+        User user = new User(normalizedUsername, normalizedEmail, null, displayName.trim(), role);
+        user.acceptLegal(TERMS_VERSION, PRIVACY_VERSION);
+        if (emailVerified) user.verifyEmail();
         user = users.save(user);
         if (role == Role.TEACHER) profiles.save(new TeacherProfile(user, generateInviteCode()));
         return user;
@@ -94,6 +112,12 @@ public class AccountService implements UserDetailsService {
     }
 
     @Transactional(readOnly = true)
+    public User requireByIdentifierOrNull(String identifier) {
+        String normalized = normalize(identifier);
+        return users.findByUsernameIgnoreCaseOrEmailIgnoreCase(normalized, normalized).orElse(null);
+    }
+
+    @Transactional(readOnly = true)
     public boolean needsLegalAcceptance(User user) {
         return !user.hasAccepted(TERMS_VERSION, PRIVACY_VERSION);
     }
@@ -117,6 +141,23 @@ public class AccountService implements UserDetailsService {
                 .map(user -> user.isLocked(now)).orElse(false);
     }
 
+    @Transactional(readOnly = true)
+    public boolean matchesPassword(User user, String rawPassword) {
+        return user.hasPassword() && rawPassword != null && encoder.matches(rawPassword, user.getPasswordHash());
+    }
+
+    @Transactional
+    public void setPassword(User user, String password) {
+        validatePassword(password);
+        User managed = users.findById(user.getId()).orElseThrow();
+        managed.changePassword(encoder.encode(password));
+    }
+
+    @Transactional
+    public void invalidateSessions(User user) {
+        users.findById(user.getId()).orElseThrow().invalidateSessions();
+    }
+
     public void validatePassword(String password) {
         if (password == null || password.length() < 10
                 || password.getBytes(StandardCharsets.UTF_8).length > 72)
@@ -131,6 +172,21 @@ public class AccountService implements UserDetailsService {
             if (profiles.findByInviteCodeIgnoreCase(code).isEmpty()) return code;
         }
         throw new IllegalStateException("Не удалось создать уникальный код приглашения");
+    }
+
+    private void validateRegistrationFields(String displayName, String normalizedUsername, String normalizedEmail,
+                                            Role role) {
+        if (displayName == null || displayName.trim().length() < 2 || displayName.trim().length() > 80)
+            throw new IllegalArgumentException("Имя должно содержать от 2 до 80 символов");
+        if (!USERNAME.matcher(normalizedUsername).matches())
+            throw new IllegalArgumentException("Некорректный логин");
+        if (normalizedEmail.length() > 254 || !EMAIL.matcher(normalizedEmail).matches())
+            throw new IllegalArgumentException("Введите корректный email");
+        if (role == null) throw new IllegalArgumentException("Выберите тип аккаунта");
+        if (users.existsByUsernameIgnoreCase(normalizedUsername))
+            throw new IllegalArgumentException("Логин уже занят");
+        if (users.existsByEmailIgnoreCase(normalizedEmail))
+            throw new IllegalArgumentException("Email уже используется");
     }
 
     private String normalize(String value) {

@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Завершение регистрации')}"></head>
+<body class="auth-page"><main class="auth-shell">
+<section class="auth-copy"><a class="brand large" href="/login"><span class="brand-mark">&gt;_</span><span>CodeClass</span></a><p class="eyebrow">VK ID</p><h1>Остался один короткий шаг.</h1><p class="lead">Выберите роль и логин. Пароль сейчас не нужен: позже его можно будет добавить в настройках.</p></section>
+<section class="auth-card"><div><p class="eyebrow">Новый аккаунт</p><h2>Завершите регистрацию</h2></div><div th:if="${registrationError}" class="alert error" th:text="${registrationError}"></div>
+<form th:action="@{/auth/vk/onboarding}" th:object="${form}" method="post" class="stack-form">
+<fieldset class="choice-fieldset"><legend>Тип аккаунта</legend><label class="choice-card"><input type="radio" th:field="*{role}" value="STUDENT"><span><b>Ученик</b></span></label><label class="choice-card"><input type="radio" th:field="*{role}" value="TEACHER"><span><b>Преподаватель</b></span></label></fieldset>
+<label>Имя и фамилия<input th:field="*{displayName}" autocomplete="name" required><small th:errors="*{displayName}"></small></label><label>Логин<input th:field="*{username}" autocomplete="username" required><small th:errors="*{username}"></small></label>
+<label>Email<input type="email" th:field="*{email}" autocomplete="email" required><small th:if="${emailFromVk}">Получен и подтверждён через VK</small><small th:unless="${emailFromVk}">Подтвердим кодом из письма</small><small th:errors="*{email}"></small></label>
+<label class="legal-check"><input type="checkbox" th:field="*{termsAccepted}"><span>Я принимаю <a th:href="@{/legal/terms}" target="_blank">Пользовательское соглашение</a></span></label><label class="legal-check"><input type="checkbox" th:field="*{personalDataAccepted}"><span>Я даю <a th:href="@{/legal/personal-data}" target="_blank">согласие на обработку персональных данных</a></span></label>
+<button class="button primary full" type="submit">Создать аккаунт <span>→</span></button></form></section></main></body></html>

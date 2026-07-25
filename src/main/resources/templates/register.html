@@ -12,6 +12,8 @@
     <section class="auth-card">
         <div><p class="eyebrow">Новый аккаунт</p><h2>Регистрация</h2></div>
         <div th:if="${registrationError}" class="alert error" th:text="${registrationError}"></div>
+        <a th:if="${vkEnabled}" class="button secondary full vk-button" th:href="@{/oauth2/authorization/vk}">Продолжить с VK</a>
+        <p th:if="${vkEnabled}" class="auth-divider"><span>или зарегистрироваться с паролем</span></p>
         <form th:action="@{/register}" th:object="${form}" method="post" class="stack-form">
             <fieldset class="choice-fieldset">
                 <legend>Тип аккаунта</legend>

@@ -84,6 +84,7 @@ h2 { margin-bottom: .4rem; font-size: 1.25rem; letter-spacing: -.025em; }
 .legal-check a,.form-link,.legal-document a { color: var(--cyan); text-decoration: underline; text-underline-offset: 3px; }
 .field-error,.stack-form label small { color: #ff9aa5; }
 .form-link { width: fit-content; margin-top: -7px; font-size: .82rem; }
+.auth-divider{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:.75rem;text-align:center}.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:var(--line)}.vk-button{color:#fff;text-decoration:none}.panel{padding:24px;border:1px solid var(--line);border-radius:16px;background:#0e1320;margin-bottom:18px}.panel h2{margin:0}.button.danger{border-color:#8a3340;color:#ffb2bb;background:#35151c}
 .compact-auth { display: grid; place-items: center; grid-template-columns: minmax(0, 520px)!important; }
 .legal-page { padding: 38px 0 80px; }
 .legal-page > .brand { margin-bottom: 24px; }
