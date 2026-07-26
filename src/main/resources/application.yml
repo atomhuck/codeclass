@@ -1,10 +1,10 @@
 spring:
   application:
-    name: codeclass
+    name: repethelper
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/codeclass}
-    username: ${SPRING_DATASOURCE_USERNAME:codeclass}
-    password: ${SPRING_DATASOURCE_PASSWORD:codeclass}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/repethelper}
+    username: ${SPRING_DATASOURCE_USERNAME:repethelper}
+    password: ${SPRING_DATASOURCE_PASSWORD:repethelper}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -34,6 +34,7 @@ server:
       # Сессия переживает закрытие браузера и истекает после 30 дней бездействия.
       timeout: 30d
       cookie:
+        name: REPETHELPER_SESSION
         max-age: 30d
   error:
     include-message: never

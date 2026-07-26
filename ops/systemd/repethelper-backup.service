@@ -1,0 +1,13 @@
+[Unit]
+Description=Encrypted RepetHelper database and attachment backup
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=repethelper-deploy
+WorkingDirectory=/opt/repethelper
+ExecStart=/opt/repethelper/ops/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

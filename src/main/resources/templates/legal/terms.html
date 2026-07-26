@@ -2,15 +2,15 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head('Пользовательское соглашение')}"></head>
 <body><main class="legal-page container narrow">
-    <a class="brand" th:href="@{/login}"><span class="brand-mark">&gt;_</span><span>CodeClass</span></a>
+    <a class="brand" th:href="@{/login}"><img class="brand-logo" th:src="@{/brand/repethelper-mark.svg}" alt=""><span>RepetHelper</span></a>
     <article class="panel legal-document">
         <p class="eyebrow">Версия от 24 июля 2026 года</p>
         <h1>Пользовательское соглашение</h1>
-        <p>Настоящее соглашение регулирует использование сервиса CodeClass на сайте repethelper.ru.</p>
+        <p>Настоящее соглашение регулирует использование сервиса RepetHelper на сайте repethelper.ru.</p>
         <h2>1. Владелец сервиса</h2>
         <p><span th:text="${legalOperatorName}">Оператор</span>, <span th:text="${legalStatus}">самозанятый</span>, ИНН <span th:text="${legalInn}">ИНН</span>, город <span th:text="${legalCity}">город</span>. Контактный адрес: <a th:href="'mailto:' + ${legalEmail}" th:text="${legalEmail}">email</a>.</p>
         <h2>2. Назначение сервиса</h2>
-        <p>CodeClass предоставляет преподавателям и ученикам инструменты для ведения расписания, обмена учебными материалами и совместной работы на графической доске. Сервис не является образовательной организацией и сам по себе не выдаёт документы об образовании.</p>
+        <p>RepetHelper предоставляет преподавателям и ученикам инструменты для ведения расписания, обмена учебными материалами и совместной работы на графической доске. Сервис не является образовательной организацией и сам по себе не выдаёт документы об образовании.</p>
         <h2>3. Аккаунт</h2>
         <p>Пользователь обязан указывать достоверные сведения, обеспечивать конфиденциальность пароля и не передавать аккаунт третьим лицам. Пользователь младше 18 лет подтверждает согласие родителя или законного представителя.</p>
         <h2>4. Материалы пользователей</h2>

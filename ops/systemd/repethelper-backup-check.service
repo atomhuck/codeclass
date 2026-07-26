@@ -1,0 +1,11 @@
+[Unit]
+Description=Monthly RepetHelper backup integrity check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=repethelper-deploy
+WorkingDirectory=/opt/repethelper
+ExecStart=/opt/repethelper/ops/check-backup.sh
+Nice=15
+IOSchedulingClass=idle

@@ -28,7 +28,7 @@ container_is_running db || {
   exit 1
 }
 
-snapshot_dir="$(mktemp -d -t codeclass-backup-XXXXXX)"
+snapshot_dir="$(mktemp -d -t repethelper-backup-XXXXXX)"
 app_stopped=false
 
 cleanup() {
@@ -54,7 +54,7 @@ compose exec -T db pg_dump \
   --no-privileges > "${snapshot_dir}/database.dump"
 
 docker run --rm \
-  --volume codeclass-attachments:/source:ro \
+  --volume repethelper-attachments:/source:ro \
   --volume "${snapshot_dir}:/backup" \
   alpine:3.22 \
   tar -C /source -czf /backup/attachments.tar.gz .
@@ -76,12 +76,12 @@ fi
 
 (
   cd "${snapshot_dir}"
-  restic backup . --host "$(hostname -f)" --tag codeclass
+  restic backup . --host "$(hostname -f)" --tag repethelper
 )
 
 restic forget \
   --host "$(hostname -f)" \
-  --tag codeclass \
+  --tag repethelper \
   --keep-daily 7 \
   --keep-weekly 4 \
   --keep-monthly 3 \

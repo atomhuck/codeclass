@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <meta name="theme-color" content="#080b13">
+    <meta name="theme-color" content="#08111A">
     <meta name="yandex-verification" content="732d53705767dd1b">
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
-    <title th:text="'Доска занятия — CodeClass'">Доска занятия — CodeClass</title>
+    <title th:text="'Доска занятия — RepetHelper'">Доска занятия — RepetHelper</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/brand/repethelper-mark.svg}">
+    <script th:src="@{/js/theme.js}"></script>
     <link rel="stylesheet" th:href="@{/css/whiteboard.css}">
 </head>
 <body>
@@ -19,8 +21,8 @@
       th:data-user-name="${user.displayName}">
     <header class="board-topbar">
         <a class="board-brand" th:href="@{/lessons/{id}(id=${lesson.id})}" aria-label="Вернуться к занятию">
-            <span>&gt;_</span>
-            <b>CodeClass</b>
+            <img th:src="@{/brand/repethelper-mark.svg}" alt="">
+            <b>RepetHelper</b>
         </a>
         <div class="board-title">
             <strong>Доска занятия</strong>

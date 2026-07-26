@@ -1,4 +1,4 @@
-name: codeclass
+name: repethelper
 
 x-logging: &default-logging
   driver: json-file
@@ -11,8 +11,8 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-codeclass}
-      POSTGRES_USER: ${POSTGRES_USER:-codeclass}
+      POSTGRES_DB: ${POSTGRES_DB:-repethelper}
+      POSTGRES_USER: ${POSTGRES_USER:-repethelper}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
     command:
       - postgres
@@ -33,12 +33,12 @@ services:
       - backend
 
   app:
-    image: ghcr.io/atomhuck/codeclass:${IMAGE_TAG:?Set IMAGE_TAG in .env.production}
+    image: ghcr.io/atomhuck/repethelper:${IMAGE_TAG:?Set IMAGE_TAG in .env.production}
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-codeclass}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-codeclass}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-repethelper}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-repethelper}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
       APP_STORAGE_PATH: /app/uploads
       APP_BASE_URL: https://${SITE_DOMAIN:?Set SITE_DOMAIN in .env.production}
@@ -103,14 +103,14 @@ services:
 
 volumes:
   postgres-data:
-    name: codeclass-postgres
+    name: repethelper-postgres
   attachment-data:
-    name: codeclass-attachments
+    name: repethelper-attachments
   caddy-data:
-    name: codeclass-caddy-data
+    name: repethelper-caddy-data
   caddy-config:
-    name: codeclass-caddy-config
+    name: repethelper-caddy-config
 
 networks:
   backend:
-    name: codeclass-backend
+    name: repethelper-backend

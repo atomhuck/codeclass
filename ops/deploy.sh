@@ -57,4 +57,4 @@ if [[ "${deployment_ok}" != "true" ]]; then
 fi
 
 printf '%s\n' "${new_tag}" > "${state_file}"
-echo "CodeClass ${new_tag} is healthy at https://${SITE_DOMAIN}."
+echo "RepetHelper ${new_tag} is healthy at https://${SITE_DOMAIN}."

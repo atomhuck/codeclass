@@ -1,4 +1,4 @@
-# CodeClass production runbook
+# RepetHelper production runbook
 
 Инструкция рассчитана на Ubuntu 24.04, один VPS, домен с HTTPS и чистую базу данных.
 
@@ -11,26 +11,26 @@
 Скопируйте репозиторий и публичный ключ на сервер, затем от имени `root` выполните:
 
 ```bash
-bash /path/to/codeclass/ops/provision-server.sh /root/codeclass-deploy.pub
+bash /path/to/repethelper/ops/provision-server.sh /root/repethelper-deploy.pub
 ```
 
 Скрипт:
 
 - создаст swap 2 ГБ;
 - установит Docker, Compose, Restic, UFW, Fail2ban и автоматические security-обновления;
-- создаст пользователя `codeclass-deploy`;
+- создаст пользователя `repethelper-deploy`;
 - разрешит в firewall только SSH, HTTP и HTTPS.
 
 Не закрывая root-сессию, обязательно проверьте новый вход:
 
 ```bash
-ssh codeclass-deploy@SERVER_IP
+ssh repethelper-deploy@SERVER_IP
 ```
 
 Только после успешной проверки входа по ключу запретите парольный SSH и прямой вход `root`:
 
 ```bash
-sudo /path/to/codeclass/ops/harden-ssh.sh --confirmed-key-login
+sudo /path/to/repethelper/ops/harden-ssh.sh --confirmed-key-login
 ```
 
 Скрипт специально вынесен в отдельный шаг, чтобы не заблокировать доступ к VPS до проверки ключа. Если используется нестандартный порт, задайте одинаковый `SSH_PORT` при выполнении обоих скриптов.
@@ -38,19 +38,19 @@ sudo /path/to/codeclass/ops/harden-ssh.sh --confirmed-key-login
 После успешного входа разместите проект:
 
 ```bash
-sudo git clone https://github.com/atomhuck/codeclass.git /opt/codeclass
-sudo chown -R codeclass-deploy:codeclass-deploy /opt/codeclass
-cd /opt/codeclass
+sudo git clone https://github.com/atomhuck/repethelper.git /opt/repethelper
+sudo chown -R repethelper-deploy:repethelper-deploy /opt/repethelper
+cd /opt/repethelper
 ```
 
 ## 2. Подготовить GitHub-образ
 
 Workflow `.github/workflows/container.yml` запускает Maven-тесты и публикует:
 
-- `ghcr.io/atomhuck/codeclass:main`;
-- `ghcr.io/atomhuck/codeclass:sha-<короткий SHA>`.
+- `ghcr.io/atomhuck/repethelper:main`;
+- `ghcr.io/atomhuck/repethelper:sha-<короткий SHA>`.
 
-После первого успешного запуска workflow откройте пакет `codeclass` в GitHub Packages и установите видимость `Public`. Серверу не потребуется хранить GitHub-токен.
+После первого успешного запуска workflow откройте пакет `repethelper` в GitHub Packages и установите видимость `Public`. Серверу не потребуется хранить GitHub-токен.
 
 Для production всегда используйте SHA-тег. `main` оставлен только для аварийной проверки.
 
@@ -61,7 +61,7 @@ Workflow `.github/workflows/container.yml` запускает Maven-тесты �
 Создайте закрытый файл настроек:
 
 ```bash
-cd /opt/codeclass
+cd /opt/repethelper
 cp .env.production.example .env.production
 chmod 600 .env.production
 ```
@@ -90,7 +90,7 @@ Production-профиль завершит запуск с ошибкой, ес�
 Инициализируйте зашифрованное хранилище и сделайте первую копию:
 
 ```bash
-cd /opt/codeclass
+cd /opt/repethelper
 ./ops/init-backup.sh
 ./ops/backup.sh
 sudo ./ops/install-timers.sh
@@ -111,7 +111,7 @@ sudo ./ops/install-timers.sh
 Убедитесь, что GitHub Actions опубликовал нужный SHA-образ, затем выполните:
 
 ```bash
-cd /opt/codeclass
+cd /opt/repethelper
 ./ops/deploy.sh sha-abcdef0
 ```
 
@@ -135,7 +135,7 @@ cd /opt/codeclass
 docker compose --env-file .env.production -f compose.production.yaml ps
 docker compose --env-file .env.production -f compose.production.yaml logs --tail=100
 sudo ufw status
-systemctl list-timers 'codeclass-backup*'
+systemctl list-timers 'repethelper-backup*'
 ```
 
 Проверьте:

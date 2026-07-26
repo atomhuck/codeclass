@@ -10,10 +10,10 @@ fi
 public_key_file="${1:-}"
 ssh_port="${SSH_PORT:-22}"
 current_ssh_port="${SSH_CONNECTION##* }"
-deploy_user="codeclass-deploy"
+deploy_user="repethelper-deploy"
 
 if [[ ! -f "${public_key_file}" ]]; then
-  echo "Usage: $0 /root/codeclass-deploy.pub" >&2
+  echo "Usage: $0 /root/repethelper-deploy.pub" >&2
   exit 1
 fi
 if ! grep -Eq '^(ssh-ed25519|sk-ssh-ed25519@openssh.com) [A-Za-z0-9+/=]+' "${public_key_file}"; then
@@ -81,7 +81,7 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
-install -d -m 0755 -o "${deploy_user}" -g "${deploy_user}" /opt/codeclass
+install -d -m 0755 -o "${deploy_user}" -g "${deploy_user}" /opt/repethelper
 systemctl enable --now docker fail2ban unattended-upgrades
 
 echo "Base server provisioned. Keep this root session open and verify a new SSH session as ${deploy_user}."

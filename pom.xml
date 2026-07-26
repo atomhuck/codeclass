@@ -8,10 +8,10 @@
         <version>4.1.0</version>
         <relativePath/>
     </parent>
-    <groupId>ru.tutor</groupId>
-    <artifactId>codeclass</artifactId>
+    <groupId>ru.repethelper</groupId>
+    <artifactId>repethelper</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>CodeClass</name>
+    <name>RepetHelper</name>
     <description>Личный кабинет репетитора по информатике</description>
     <properties>
         <java.version>21</java.version>

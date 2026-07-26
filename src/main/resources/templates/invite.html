@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Приглашение в CodeClass')}"></head>
+<head th:replace="~{fragments :: head('Приглашение в RepetHelper')}"></head>
 <body class="auth-page">
 <main class="auth-shell compact-auth">
     <section class="auth-card role-card invite-card">
-        <p class="eyebrow">Приглашение в CodeClass</p>
+        <p class="eyebrow">Приглашение в RepetHelper</p>
         <h1>Занятия с <span th:text="${invite.teacherName}">преподавателем</span></h1>
         <p class="lead">После подключения преподаватель сможет назначать занятия и прикреплять материалы.</p>
         <div th:if="${success}" class="alert success" th:text="${success}"></div>

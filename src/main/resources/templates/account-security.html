@@ -4,7 +4,7 @@
 <body>
 <nav th:replace="~{fragments :: nav(${user}, 'security')}"></nav>
 <main class="container narrow page">
-    <header class="page-header"><div><p class="eyebrow">Аккаунт</p><h1>Безопасность</h1><p>Способы входа в CodeClass.</p></div></header>
+    <header class="page-header"><div><p class="eyebrow">Аккаунт</p><h1>Безопасность</h1><p>Способы входа в RepetHelper.</p></div></header>
     <div th:if="${success}" class="alert success" th:text="${success}"></div>
     <div th:if="${error}" class="alert error" th:text="${error}"></div>
     <section class="panel stack-form">
@@ -24,5 +24,7 @@
         <p th:if="${vkIdentity != null and !user.hasPassword()}" class="legal-note">VK нельзя отключить, потому что это единственный способ входа в аккаунт.</p>
     </section>
 </main>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'dashboard')}"></nav>
+<footer th:replace="~{fragments :: footer}"></footer>
 </body>
 </html>

@@ -13,7 +13,7 @@
 
     <section class="panel board-card">
         <div class="board-card-visual" aria-hidden="true">
-            <span class="board-grid-mark">&gt;_</span>
+            <span class="board-grid-mark">RH</span>
             <i></i><i></i><i></i>
         </div>
         <div class="board-card-copy">
@@ -97,5 +97,7 @@
         });
     </script>
 </main>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'dashboard')}"></nav>
+<footer th:replace="~{fragments :: footer}"></footer>
 </body>
 </html>

@@ -15,12 +15,12 @@ require_secret_variable RESTIC_PASSWORD 24
 require_secret_variable AWS_SECRET_ACCESS_KEY 16
 
 snapshot="${1:-latest}"
-restore_dir="$(mktemp -d -t codeclass-restore-XXXXXX)"
+restore_dir="$(mktemp -d -t repethelper-restore-XXXXXX)"
 suffix="$(date +%s)-$$"
-container="codeclass-restore-${suffix}"
-database_volume="codeclass-restore-db-${suffix}"
-attachment_volume="codeclass-restore-files-${suffix}"
-network="codeclass-restore-${suffix}"
+container="repethelper-restore-${suffix}"
+database_volume="repethelper-restore-db-${suffix}"
+attachment_volume="repethelper-restore-files-${suffix}"
+network="repethelper-restore-${suffix}"
 test_password="restore-${suffix}"
 
 cleanup() {
@@ -33,7 +33,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-restic restore "${snapshot}" --tag codeclass --target "${restore_dir}"
+restic restore "${snapshot}" --tag repethelper --target "${restore_dir}"
 [[ -s "${restore_dir}/database.dump" ]] || {
   echo "Restored snapshot does not contain database.dump." >&2
   exit 1
@@ -49,13 +49,13 @@ docker volume create "${attachment_volume}" >/dev/null
 docker run -d --name "${container}" \
   --network "${network}" \
   --volume "${database_volume}:/var/lib/postgresql/data" \
-  --env POSTGRES_DB=codeclass_restore \
-  --env POSTGRES_USER=codeclass_restore \
+  --env POSTGRES_DB=repethelper_restore \
+  --env POSTGRES_USER=repethelper_restore \
   --env POSTGRES_PASSWORD="${test_password}" \
   postgres:17-alpine >/dev/null
 
 deadline=$((SECONDS + 60))
-until docker exec "${container}" pg_isready -U codeclass_restore -d codeclass_restore >/dev/null 2>&1; do
+until docker exec "${container}" pg_isready -U repethelper_restore -d repethelper_restore >/dev/null 2>&1; do
   (( SECONDS < deadline )) || {
     echo "Temporary restore database did not become ready." >&2
     exit 1
@@ -64,14 +64,14 @@ until docker exec "${container}" pg_isready -U codeclass_restore -d codeclass_re
 done
 
 docker exec -i "${container}" pg_restore \
-  --username=codeclass_restore \
-  --dbname=codeclass_restore \
+  --username=repethelper_restore \
+  --dbname=repethelper_restore \
   --no-owner \
   --no-privileges < "${restore_dir}/database.dump"
 
 table_count="$(docker exec "${container}" psql \
-  --username=codeclass_restore \
-  --dbname=codeclass_restore \
+  --username=repethelper_restore \
+  --dbname=repethelper_restore \
   --tuples-only \
   --no-align \
   --command="select count(*) from information_schema.tables where table_schema = 'public';")"

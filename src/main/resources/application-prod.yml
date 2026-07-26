@@ -6,6 +6,7 @@ server:
   servlet:
     session:
       cookie:
+        name: REPETHELPER_SESSION
         secure: true
         http-only: true
         same-site: lax
