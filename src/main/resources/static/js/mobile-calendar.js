@@ -34,6 +34,17 @@
   document.addEventListener("DOMContentLoaded", initialise);
   document.addEventListener("DOMContentLoaded", () => {
     if (location.hash === "#new-lesson") document.getElementById("new-lesson")?.setAttribute("open", "");
+    const updateStudentNav = () => {
+      const nav = document.querySelector(".mobile-nav");
+      const history = nav?.querySelector('a[href*="#history"]');
+      const lessons = nav?.querySelector('a[href="/student"]');
+      if (!history || !lessons) return;
+      const historySelected = location.hash === "#history";
+      history.classList.toggle("active", historySelected);
+      lessons.classList.toggle("active", !historySelected);
+    };
+    updateStudentNav();
+    window.addEventListener("hashchange", updateStudentNav);
   });
   mobile.addEventListener?.("change", initialise);
 })();

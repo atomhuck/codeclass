@@ -20,7 +20,7 @@ public class SecurityConfig {
                                              LoginAttemptService attempts, InvitationService invitations,
                                              @Value("${app.account-gate-enabled:true}") boolean accountGateEnabled) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/css/**", "/js/**", "/vendor/**", "/login", "/register",
+                .requestMatchers("/css/**", "/js/**", "/vendor/**", "/brand/**", "/login", "/register",
                         "/forgot-password", "/reset-password",
                         "/oauth2/**", "/login/oauth2/**", "/auth/vk/**",
                         "/invite/**",

@@ -24,7 +24,7 @@
         <p th:if="${vkIdentity != null and !user.hasPassword()}" class="legal-note">VK нельзя отключить, потому что это единственный способ входа в аккаунт.</p>
     </section>
 </main>
-<nav th:replace="~{fragments :: mobileNav(${user}, 'dashboard')}"></nav>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'account')}"></nav>
 <footer th:replace="~{fragments :: footer}"></footer>
 </body>
 </html>
