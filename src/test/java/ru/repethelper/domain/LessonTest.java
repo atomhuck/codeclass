@@ -20,4 +20,12 @@ class LessonTest {
         assertThat(lesson.isPast(Instant.parse("2026-07-24T10:00:00Z"))).isFalse();
         assertThat(lesson.getStatus()).isEqualTo(LessonStatus.CANCELLED);
     }
+
+    @Test void meetingUrlCanBeAttachedAndRemoved() {
+        Lesson lesson = new Lesson(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60);
+        lesson.updateMeetingUrl("https://telemost.yandex.ru/j/123");
+        assertThat(lesson.getMeetingUrl()).isEqualTo("https://telemost.yandex.ru/j/123");
+        lesson.updateMeetingUrl(null);
+        assertThat(lesson.getMeetingUrl()).isNull();
+    }
 }

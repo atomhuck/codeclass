@@ -27,6 +27,8 @@ public class LessonController {
         var all = attachments.list(lesson);
         LessonMaterialsForm materials = new LessonMaterialsForm();
         materials.setHomeworkText(lesson.getHomeworkText()); materials.setLessonNotesText(lesson.getLessonNotesText());
+        MeetingUrlForm meetingUrl = new MeetingUrlForm();
+        meetingUrl.setMeetingUrl(lesson.getMeetingUrl());
         LessonForm schedule = new LessonForm();
         schedule.setStudentId(lesson.getStudent().getId()); schedule.setStartAt(LocalDateTime.ofInstant(lesson.getStartAt(), lessons.zone()));
         schedule.setDurationMinutes(lesson.getDurationMinutes());
@@ -35,6 +37,7 @@ public class LessonController {
         model.addAttribute("board", board);
         model.addAttribute("past", lessons.isPast(lesson));
         model.addAttribute("materialsForm", materials);
+        model.addAttribute("meetingUrlForm", meetingUrl);
         model.addAttribute("lessonForm", schedule);
         model.addAttribute("homeworkFiles", all.stream().filter(a -> a.getCategory() == AttachmentCategory.HOMEWORK).toList());
         model.addAttribute("notesFiles", all.stream().filter(a -> a.getCategory() == AttachmentCategory.LESSON_NOTES).toList());

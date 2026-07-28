@@ -11,6 +11,23 @@
         <details th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" class="popover"><summary class="button secondary">Перенести</summary><form th:action="@{/teacher/lessons/{id}/reschedule(id=${lesson.id})}" th:object="${lessonForm}" method="post" class="panel popover-panel stack-form"><h3>Перенос занятия</h3><input type="hidden" th:field="*{studentId}"><input type="hidden" th:field="*{recurrence}"><label>Новая дата и время<input type="datetime-local" th:field="*{startAt}" required></label><label>Длительность<input type="number" min="15" max="300" step="15" th:field="*{durationMinutes}"></label><fieldset th:if="${lesson.recurring}" class="choice-fieldset"><legend>Применить изменение</legend><label class="choice-card"><input type="radio" th:field="*{scope}" value="SINGLE"><span><b>Только к этому</b><small>Остальные останутся как были</small></span></label><label class="choice-card"><input type="radio" th:field="*{scope}" value="FOLLOWING"><span><b>К этому и последующим</b><small>Вся будущая часть серии сдвинется</small></span></label></fieldset><button class="button primary">Перенести</button></form></details>
     </header>
 
+    <section class="panel meeting-card">
+        <div class="meeting-card-copy">
+            <p class="eyebrow">Онлайн-встреча</p>
+            <h2>Ссылка на занятие</h2>
+            <p>Подключайтесь к звонку в назначенное время.</p>
+        </div>
+        <a th:if="${lesson.meetingUrl != null}" class="lesson-call-button is-ready" th:href="${lesson.meetingUrl}"
+           target="_blank" rel="noopener noreferrer">Перейти к звонку <span aria-hidden="true">↗</span></a>
+        <span th:unless="${lesson.meetingUrl != null}" class="lesson-call-button is-disabled" aria-disabled="true">Ссылка на занятие не прикреплена</span>
+        <form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/meeting-url(id=${lesson.id})}"
+              th:object="${meetingUrlForm}" method="post" class="meeting-url-form">
+            <label for="meetingUrl">Ссылка на звонок</label>
+            <div><input id="meetingUrl" th:field="*{meetingUrl}" type="url" inputmode="url" placeholder="https://…"><button class="button secondary" type="submit">Сохранить</button></div>
+            <small>Оставьте поле пустым и сохраните, чтобы убрать ссылку.</small>
+        </form>
+    </section>
+
     <section class="panel board-card">
         <div class="board-card-visual" aria-hidden="true">
             <span class="board-grid-mark">RH</span>
@@ -47,8 +64,8 @@
     </form>
 
     <div th:if="${user.role.name() == 'STUDENT'}" class="lesson-sections">
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon green">✓</span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><div class="rich-text" th:classappend="${lesson.homeworkText == null} ? 'empty-text'" th:text="${lesson.homeworkText != null ? lesson.homeworkText : 'Преподаватель пока не добавил задание.'}"></div></section>
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan">#</span><div><p class="eyebrow">Разобрали на уроке</p><h2>Материалы занятия</h2></div></div><div class="rich-text" th:classappend="${lesson.lessonNotesText == null} ? 'empty-text'" th:text="${lesson.lessonNotesText != null ? lesson.lessonNotesText : 'Заметка появится после занятия.'}"></div></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon green">✓</span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><div class="rich-text" th:classappend="${lesson.homeworkText == null} ? 'empty-text'" th:utext="${lesson.homeworkText != null ? @textLinkifier.linkify(lesson.homeworkText) : 'Преподаватель пока не добавил задание.'}"></div></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan">#</span><div><p class="eyebrow">Разобрали на уроке</p><h2>Материалы занятия</h2></div></div><div class="rich-text" th:classappend="${lesson.lessonNotesText == null} ? 'empty-text'" th:utext="${lesson.lessonNotesText != null ? @textLinkifier.linkify(lesson.lessonNotesText) : 'Заметка появится после занятия.'}"></div></section>
     </div>
 
     <section class="attachments-grid">

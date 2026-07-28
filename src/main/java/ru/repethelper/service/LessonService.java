@@ -9,6 +9,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import ru.repethelper.domain.*;
 import ru.repethelper.repository.*;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
@@ -114,6 +116,9 @@ public class LessonService {
     }
     @Transactional public void updateMaterials(User teacher, Long id, String homework, String notes) {
         requireTeacherLesson(teacher, id).updateMaterials(blankToNull(homework), blankToNull(notes));
+    }
+    @Transactional public void updateMeetingUrl(User teacher, Long id, String meetingUrl) {
+        requireTeacherLesson(teacher, id).updateMeetingUrl(normalizeMeetingUrl(meetingUrl));
     }
 
     @Transactional(readOnly = true)
@@ -223,6 +228,20 @@ public class LessonService {
     }
     private void requireRecurring(Lesson lesson) {
         if (!lesson.isRecurring()) throw new IllegalArgumentException("Это занятие не входит в еженедельную серию");
+    }
+    private String normalizeMeetingUrl(String value) {
+        String trimmed = blankToNull(value);
+        if (trimmed == null) return null;
+        try {
+            URI url = new URI(trimmed);
+            if (!("http".equalsIgnoreCase(url.getScheme()) || "https".equalsIgnoreCase(url.getScheme()))
+                    || url.getHost() == null || url.getUserInfo() != null) {
+                throw new IllegalArgumentException("Укажите корректную ссылку на звонок, начиная с https://");
+            }
+            return url.toASCIIString();
+        } catch (URISyntaxException ex) {
+            throw new IllegalArgumentException("Укажите корректную ссылку на звонок, начиная с https://");
+        }
     }
     private void requireTeacher(User user) { if (user.getRole() != Role.TEACHER) throw new ResponseStatusException(HttpStatus.FORBIDDEN); }
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }

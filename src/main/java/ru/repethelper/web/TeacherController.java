@@ -125,6 +125,18 @@ public class TeacherController {
         flash.addFlashAttribute("success", "Материалы сохранены"); return "redirect:/lessons/" + id;
     }
 
+    @PostMapping("/lessons/{id}/meeting-url")
+    String updateMeetingUrl(Authentication auth, @PathVariable Long id, @Valid MeetingUrlForm form,
+                            BindingResult errors, RedirectAttributes flash) {
+        if (errors.hasErrors()) return error(flash, errors.getAllErrors().getFirst().getDefaultMessage(), "/lessons/" + id);
+        try {
+            lessons.updateMeetingUrl(current(auth), id, form.getMeetingUrl());
+            flash.addFlashAttribute("success", form.getMeetingUrl() == null || form.getMeetingUrl().isBlank()
+                    ? "Ссылка на занятие удалена" : "Ссылка на занятие сохранена");
+        } catch (IllegalArgumentException ex) { flash.addFlashAttribute("error", ex.getMessage()); }
+        return "redirect:/lessons/" + id;
+    }
+
     private User current(Authentication auth) { return accounts.requireByUsername(auth.getName()); }
     private YearMonth safeMonth(Integer year, Integer month) {
         if (year == null || month == null) return YearMonth.now(lessons.zone());

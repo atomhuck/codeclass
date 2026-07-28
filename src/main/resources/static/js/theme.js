@@ -25,6 +25,15 @@
     if (button) set(button.dataset.themeChoice);
     if (event.target.closest("[data-theme-toggle]")) set(resolved() === "dark" ? "light" : "dark");
     const dialog = document.querySelector("[data-logout-dialog]");
-    if (event.target.closest("[data-logout-confirm]") && dialog) dialog.showModal();
+    const logout = event.target.closest("[data-logout-confirm]");
+    if (logout && dialog) {
+      logout.closest("details")?.removeAttribute("open");
+      if (!dialog.open) dialog.showModal();
+    }
+  });
+  document.addEventListener("pointerdown", event => {
+    document.querySelectorAll("details.account-menu[open]").forEach(menu => {
+      if (!menu.contains(event.target)) menu.removeAttribute("open");
+    });
   });
 })();

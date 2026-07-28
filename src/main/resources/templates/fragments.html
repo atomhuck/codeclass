@@ -37,17 +37,17 @@
         </details>
     </div>
     </div>
-</nav>
-<dialog class="logout-dialog" data-logout-dialog aria-labelledby="logout-title">
-    <div class="logout-dialog-card">
-        <p class="eyebrow">Выход из аккаунта</p><h2 id="logout-title">Выйти из RepetHelper?</h2>
-        <p>Вы сможете войти снова в любой момент.</p>
-        <div class="logout-dialog-actions">
-            <form method="dialog"><button class="button secondary" value="cancel">Остаться</button></form>
-            <form th:action="@{/logout}" method="post"><button class="button danger" type="submit">Выйти</button></form>
+    <dialog class="logout-dialog" data-logout-dialog aria-labelledby="logout-title">
+        <div class="logout-dialog-card">
+            <p class="eyebrow">Выход из аккаунта</p><h2 id="logout-title">Выйти из RepetHelper?</h2>
+            <p>Вы сможете войти снова в любой момент.</p>
+            <div class="logout-dialog-actions">
+                <form method="dialog"><button class="button secondary" value="cancel">Остаться</button></form>
+                <form th:action="@{/logout}" method="post"><button class="button danger" type="submit">Выйти</button></form>
+            </div>
         </div>
-    </div>
-</dialog>
+    </dialog>
+</nav>
 
 <nav th:fragment="mobileNav(user, area)" class="mobile-nav" aria-label="Основная навигация">
     <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher}" th:classappend="${area == 'dashboard'} ? 'active'">▦<span>Расписание</span></a>

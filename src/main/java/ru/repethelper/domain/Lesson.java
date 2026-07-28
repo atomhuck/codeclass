@@ -27,6 +27,8 @@ public class Lesson {
     private String homeworkText;
     @Column(name = "lesson_notes_text", columnDefinition = "text")
     private String lessonNotesText;
+    @Column(name = "meeting_url", columnDefinition = "text")
+    private String meetingUrl;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -52,12 +54,14 @@ public class Lesson {
     public LessonStatus getStatus() { return status; }
     public String getHomeworkText() { return homeworkText; }
     public String getLessonNotesText() { return lessonNotesText; }
+    public String getMeetingUrl() { return meetingUrl; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getEndAt() { return startAt.plus(Duration.ofMinutes(durationMinutes)); }
     public boolean isPast(Instant now) { return status != LessonStatus.CANCELLED && !getEndAt().isAfter(now); }
     public void reschedule(Instant startAt, int durationMinutes) { this.startAt = startAt; this.durationMinutes = durationMinutes; touch(); }
     public void updateMaterials(String homeworkText, String notesText) { this.homeworkText = homeworkText; this.lessonNotesText = notesText; touch(); }
+    public void updateMeetingUrl(String meetingUrl) { this.meetingUrl = meetingUrl; touch(); }
     public void cancel() { this.status = LessonStatus.CANCELLED; touch(); }
     private void touch() { this.updatedAt = Instant.now(); }
 }
