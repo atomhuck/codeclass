@@ -33,6 +33,9 @@
             <span id="connection-label">Подключение…</span>
             <span id="participant-count" class="participant-count">1</span>
         </div>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить тему" title="Переключить тему">
+            <span class="theme-toggle-sun" aria-hidden="true">☀</span><span class="theme-toggle-moon" aria-hidden="true">☾</span>
+        </button>
         <button id="copy-link" class="topbar-button" type="button" title="Скопировать ссылку">Скопировать ссылку</button>
         <a class="topbar-button back-button" th:href="@{/lessons/{id}(id=${lesson.id})}">К занятию</a>
     </header>

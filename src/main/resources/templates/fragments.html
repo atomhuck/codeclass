@@ -23,22 +23,31 @@
         <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/students}" th:classappend="${area == 'students'} ? 'active'">Ученики</a>
         <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}" class="active">Мои занятия</a>
     </div>
+    <div class="topbar-actions">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить тему" title="Переключить тему">
+            <span class="theme-toggle-sun" aria-hidden="true">☀</span><span class="theme-toggle-moon" aria-hidden="true">☾</span>
+        </button>
     <div class="account">
         <details class="account-menu">
             <summary class="account-summary"><span class="account-name" th:text="${user.displayName}">Имя</span><span aria-hidden="true">⌄</span></summary>
             <div class="account-menu-panel">
-                <span class="menu-label">Тема</span>
-                <div class="theme-choices" role="group" aria-label="Тема оформления">
-                    <button type="button" data-theme-choice="system">Системная</button>
-                    <button type="button" data-theme-choice="light">Светлая</button>
-                    <button type="button" data-theme-choice="dark">Тёмная</button>
-                </div>
                 <a th:href="@{/account/security}" class="account-link">Аккаунт и безопасность</a>
-                <form th:action="@{/logout}" method="post"><button class="account-logout" type="submit">Выйти</button></form>
+                <button class="account-logout" type="button" data-logout-confirm>Выйти</button>
             </div>
         </details>
     </div>
+    </div>
 </nav>
+<dialog class="logout-dialog" data-logout-dialog aria-labelledby="logout-title">
+    <div class="logout-dialog-card">
+        <p class="eyebrow">Выход из аккаунта</p><h2 id="logout-title">Выйти из RepetHelper?</h2>
+        <p>Вы сможете войти снова в любой момент.</p>
+        <div class="logout-dialog-actions">
+            <form method="dialog"><button class="button secondary" value="cancel">Остаться</button></form>
+            <form th:action="@{/logout}" method="post"><button class="button danger" type="submit">Выйти</button></form>
+        </div>
+    </div>
+</dialog>
 
 <nav th:fragment="mobileNav(user, area)" class="mobile-nav" aria-label="Основная навигация">
     <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher}" th:classappend="${area == 'dashboard'} ? 'active'">▦<span>Расписание</span></a>
