@@ -507,7 +507,7 @@ class FullFlowIntegrationTest {
         Lesson lessonB = lessons.create(teacherB, student.getId(),
                 LocalDateTime.of(2026, 11, 3, 17, 0), 60);
         assertThat(lessons.forMonth(student, java.time.YearMonth.of(2026, 11)))
-                .contains(lessonA, lessonB);
+                .extracting(Lesson::getId).contains(lessonA.getId(), lessonB.getId());
         assertThatThrownBy(() -> lessons.requireTeacherLesson(teacherA, lessonB.getId()))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
                 .satisfies(ex -> assertThat(((org.springframework.web.server.ResponseStatusException) ex)
