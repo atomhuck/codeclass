@@ -39,8 +39,15 @@
       days.forEach(day => {
         day.tabIndex = 0;
         day.setAttribute("role", "button");
-        day.addEventListener("click", event => { if (!event.target.closest(".calendar-event")) show(day); });
-        day.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); show(day); } });
+        day.addEventListener("click", event => {
+          if (!event.target.closest(".calendar-event")) show(day, day.classList.contains("today"));
+        });
+        day.addEventListener("keydown", event => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            show(day, day.classList.contains("today"));
+          }
+        });
       });
       const today = [...days].find(day => day.classList.contains("today"));
       show(today || [...days].find(day => day.querySelector(".calendar-event")) || days[0], Boolean(today));
