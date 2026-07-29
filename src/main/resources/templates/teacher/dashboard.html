@@ -38,7 +38,7 @@
             </div>
             <div class="calendar weekdays"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
             <div class="calendar days">
-                <div th:each="day : ${calendar.days}" class="calendar-day" th:classappend="${!day.currentMonth} ? 'muted' : (${day.today} ? 'today' : '')">
+                <div th:each="day : ${calendar.days}" class="calendar-day" th:classappend="${(!day.currentMonth ? ' muted' : (day.today ? ' today' : '')) + (day.hasScheduledLessons ? ' has-lessons' : '')}">
                     <span class="day-number" th:text="${day.date.dayOfMonth}">1</span>
                     <a th:each="lesson : ${day.lessons}" th:href="@{/lessons/{id}(id=${lesson.id})}" class="calendar-event" th:classappend="${lesson.status.name() == 'CANCELLED'} ? 'cancelled'">
                         <b th:text="${@timeView.time(lesson.startAt)}">17:00</b><span th:text="${lesson.student.displayName}">Ученик</span>

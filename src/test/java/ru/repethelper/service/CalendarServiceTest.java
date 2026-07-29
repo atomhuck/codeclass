@@ -22,6 +22,21 @@ class CalendarServiceTest {
                 .singleElement().satisfies(day -> {
                     assertThat(day.today()).isTrue();
                     assertThat(day.lessons()).containsExactly(lesson);
+                    assertThat(day.hasScheduledLessons()).isTrue();
                 });
+    }
+
+    @Test void cancelledLessonDoesNotMarkDayAsScheduled() {
+        Clock clock = Clock.fixed(Instant.parse("2026-07-23T10:00:00Z"), ZoneOffset.UTC);
+        CalendarService service = new CalendarService("Europe/Moscow", clock);
+        User teacher = new User("teacher", "hash", "Преподаватель", Role.TEACHER);
+        User student = new User("student", "hash", "Ученик", Role.STUDENT);
+        Lesson lesson = new Lesson(teacher, student, Instant.parse("2026-07-23T14:00:00Z"), 60);
+        lesson.cancel();
+
+        var calendar = service.build(YearMonth.of(2026, 7), List.of(lesson));
+
+        assertThat(calendar.days()).filteredOn(day -> day.date().equals(LocalDate.of(2026, 7, 23)))
+                .singleElement().satisfies(day -> assertThat(day.hasScheduledLessons()).isFalse());
     }
 }

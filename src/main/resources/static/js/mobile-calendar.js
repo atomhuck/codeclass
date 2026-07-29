@@ -11,16 +11,30 @@
       agenda.className = "mobile-day-agenda";
       agenda.setAttribute("aria-live", "polite");
       panel.appendChild(agenda);
-      const show = day => {
+      const title = panel.querySelector("h2")?.textContent || "";
+      const nearestLesson = panel.closest(".dashboard-grid")?.querySelector(".side-panel .upcoming-item");
+      const show = (day, initial = false) => {
         days.forEach(item => item.classList.toggle("selected", item === day));
         const number = day.querySelector(".day-number")?.textContent || "";
         const events = [...day.querySelectorAll(".calendar-event")];
-        agenda.innerHTML = `<p class="eyebrow">Выбранный день</p><h3>${number} ${panel.querySelector("h2")?.textContent || ""}</h3>`;
-        if (!events.length) { agenda.insertAdjacentHTML("beforeend", '<p class="mobile-day-empty">На этот день занятий нет.</p>'); return; }
-        const list = document.createElement("div");
-        list.className = "mobile-day-list";
-        events.forEach(event => list.appendChild(event.cloneNode(true)));
-        agenda.appendChild(list);
+        const isToday = day.classList.contains("today");
+        agenda.innerHTML = `<p class="eyebrow">${isToday ? "Сегодня" : "Выбранный день"}</p><h3>${number} ${title}</h3>`;
+        if (!events.length) {
+          agenda.insertAdjacentHTML("beforeend", `<p class="mobile-day-empty">${isToday ? "На сегодняшний день никаких занятий не запланировано." : "На этот день занятий не запланировано."}</p>`);
+        } else {
+          const list = document.createElement("div");
+          list.className = "mobile-day-list";
+          events.forEach(event => list.appendChild(event.cloneNode(true)));
+          agenda.appendChild(list);
+        }
+        if (initial && isToday) {
+          const next = document.createElement("div");
+          next.className = "mobile-next-lesson";
+          next.innerHTML = "<p class=\"eyebrow\">Ближайшее занятие</p>";
+          if (nearestLesson) next.appendChild(nearestLesson.cloneNode(true));
+          else next.insertAdjacentHTML("beforeend", "<p>Ближайших занятий пока нет.</p>");
+          agenda.appendChild(next);
+        }
       };
       days.forEach(day => {
         day.tabIndex = 0;
@@ -28,7 +42,8 @@
         day.addEventListener("click", event => { if (!event.target.closest(".calendar-event")) show(day); });
         day.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); show(day); } });
       });
-      show([...days].find(day => day.classList.contains("today")) || [...days].find(day => day.querySelector(".calendar-event")) || days[0]);
+      const today = [...days].find(day => day.classList.contains("today"));
+      show(today || [...days].find(day => day.querySelector(".calendar-event")) || days[0], Boolean(today));
     });
   };
   document.addEventListener("DOMContentLoaded", initialise);
