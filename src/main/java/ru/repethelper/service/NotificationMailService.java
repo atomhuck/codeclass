@@ -4,8 +4,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import jakarta.mail.MessagingException;
+import java.io.UnsupportedEncodingException;
 
 @Service
 public class NotificationMailService {
@@ -34,6 +38,24 @@ public class NotificationMailService {
                 "Ваш код для создания нового пароля:\n\n" + code
                         + "\n\nКод действует 15 минут и может быть использован один раз."
                         + "\nЕсли вы не запрашивали сброс пароля, просто проигнорируйте письмо.");
+    }
+
+    public boolean isEnabled() { return enabled; }
+
+    public void sendNotification(String email, String subject, String body) {
+        if (!enabled) return;
+        try {
+            var message = sender.createMimeMessage();
+            var helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(from, "RepetHelper");
+            helper.setReplyTo(replyTo);
+            helper.setTo(email);
+            helper.setSubject(subject);
+            helper.setText(body, false);
+            sender.send(message);
+        } catch (MessagingException | UnsupportedEncodingException ex) {
+            throw new MailSendException("Не удалось подготовить email-уведомление", ex);
+        }
     }
 
     private void send(String email, String subject, String body) {

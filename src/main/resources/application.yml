@@ -60,6 +60,10 @@ app:
     enabled: ${APP_MAIL_ENABLED:false}
     from: ${APP_MAIL_FROM:no-reply@repethelper.ru}
     reply-to: ${APP_MAIL_REPLY_TO:efimok05@gmail.com}
+  notifications:
+    delivery-delay-ms: 60000
+    reminder-delay-ms: 60000
+    initial-delay-ms: 15000
   vk:
     enabled: ${APP_VK_AUTH_ENABLED:false}
     client-id: ${VK_CLIENT_ID:}

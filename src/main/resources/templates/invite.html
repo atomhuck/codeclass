@@ -35,11 +35,6 @@
             <b>Вы уже подключены к этому преподавателю.</b>
             <a class="button primary" th:href="@{/student}">Открыть расписание</a>
         </div>
-        <div th:if="${state == 'CONNECTED_TO_OTHER'}" class="panel invite-state">
-            <b>Вы уже подключены к другому преподавателю.</b>
-            <p>Сначала предыдущий преподаватель должен удалить связь с вашим аккаунтом.</p>
-            <a class="button secondary" th:href="@{/student}">В кабинет ученика</a>
-        </div>
     </section>
 </main>
 </body>

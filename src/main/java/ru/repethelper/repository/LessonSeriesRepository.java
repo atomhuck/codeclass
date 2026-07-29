@@ -7,11 +7,11 @@ import ru.repethelper.domain.User;
 import java.util.*;
 
 public interface LessonSeriesRepository extends JpaRepository<LessonSeries, UUID> {
-    @EntityGraph(attributePaths = "student")
+    @EntityGraph(attributePaths = {"student", "teacher"})
     List<LessonSeries> findAll();
-    @EntityGraph(attributePaths = "student")
+    @EntityGraph(attributePaths = {"student", "teacher"})
     List<LessonSeries> findByTeacher(User teacher);
-    @EntityGraph(attributePaths = "student")
+    @EntityGraph(attributePaths = {"student", "teacher"})
     List<LessonSeries> findByStudent(User student);
     List<LessonSeries> findByTeacherAndStudent(User teacher, User student);
 }

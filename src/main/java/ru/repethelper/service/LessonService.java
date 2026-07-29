@@ -26,16 +26,18 @@ public class LessonService {
     private final LessonSeriesRepository seriesRepository;
     private final AttachmentRepository attachments;
     private final WhiteboardService whiteboards;
+    private final AppNotificationService notifications;
     private final Path storageRoot;
     private final ZoneId zone;
     private final Clock clock;
     public LessonService(LessonRepository lessons, UserRepository users, ConnectionRequestRepository connections,
                          LessonSeriesRepository seriesRepository, AttachmentRepository attachments, WhiteboardService whiteboards,
+                         AppNotificationService notifications,
                          @org.springframework.beans.factory.annotation.Value("${app.timezone}") String timezone,
                          @org.springframework.beans.factory.annotation.Value("${app.storage-path}") String storagePath,
                          Clock clock) {
         this.lessons = lessons; this.users = users; this.connections = connections; this.seriesRepository = seriesRepository;
-        this.attachments = attachments; this.whiteboards = whiteboards;
+        this.attachments = attachments; this.whiteboards = whiteboards; this.notifications = notifications;
         this.storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
         this.zone = ZoneId.of(timezone); this.clock = clock;
     }
@@ -49,9 +51,13 @@ public class LessonService {
         Instant start = localStart.atZone(zone).toInstant();
         if (recurrence == LessonRecurrence.WEEKLY) {
             LessonSeries series = seriesRepository.save(new LessonSeries(teacher, student, start, duration));
-            return lessons.save(new Lesson(series, 0));
+            Lesson lesson = lessons.save(new Lesson(series, 0));
+            notifications.seriesCreated(lesson);
+            return lesson;
         }
-        return lessons.save(new Lesson(teacher, student, start, duration));
+        Lesson lesson = lessons.save(new Lesson(teacher, student, start, duration));
+        notifications.lessonCreated(lesson);
+        return lesson;
     }
 
     @Transactional
@@ -63,19 +69,25 @@ public class LessonService {
     public void reschedule(User teacher, Long id, LocalDateTime localStart, int duration, LessonChangeScope scope) {
         Lesson lesson = requireTeacherLesson(teacher, id);
         if (lesson.getStatus() == LessonStatus.CANCELLED) throw new IllegalArgumentException("Отменённое занятие нельзя перенести");
+        Instant oldStart = lesson.getStartAt();
+        int oldDuration = lesson.getDurationMinutes();
         Instant newStart = localStart.atZone(zone).toInstant();
         if (scope == LessonChangeScope.FOLLOWING) {
             requireRecurring(lesson);
             Instant seriesOccurrenceStart = lesson.getSeries().occurrenceStart(lesson.getOccurrenceIndex());
             lesson.getSeries().shiftFrom(seriesOccurrenceStart, newStart, duration);
-            lessons.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
-                    lesson.getSeries().getId(), lesson.getOccurrenceIndex()).stream()
+            List<Lesson> following = lessons.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                    lesson.getSeries().getId(), lesson.getOccurrenceIndex());
+            following.forEach(item -> notifications.cancelReminder(item.getId()));
+            following.stream()
                     .filter(item -> item.getStatus() == LessonStatus.SCHEDULED)
                     .forEach(item -> item.reschedule(
                             lesson.getSeries().occurrenceStart(item.getOccurrenceIndex()), duration));
+            notifications.lessonRescheduled(lesson, oldStart, oldDuration, true);
             return;
         }
         lesson.reschedule(newStart, duration);
+        notifications.lessonRescheduled(lesson, oldStart, oldDuration, false);
     }
 
     @Transactional
@@ -88,11 +100,15 @@ public class LessonService {
         Lesson lesson = requireTeacherLesson(teacher, id);
         if (scope == LessonChangeScope.FOLLOWING) {
             requireRecurring(lesson);
+            notifications.lessonDeleted(lesson, true);
             lesson.getSeries().cancelFrom(lesson.getOccurrenceIndex());
-            deleteLessons(lessons.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
-                    lesson.getSeries().getId(), lesson.getOccurrenceIndex()));
+            List<Lesson> following = lessons.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                    lesson.getSeries().getId(), lesson.getOccurrenceIndex());
+            following.forEach(item -> notifications.cancelReminder(item.getId()));
+            deleteLessons(following);
             return;
         }
+        notifications.lessonDeleted(lesson, false);
         if (lesson.isRecurring()) lesson.getSeries().exclude(lesson.getOccurrenceIndex());
         deleteLessons(List.of(lesson));
     }
@@ -115,7 +131,11 @@ public class LessonService {
         return new DeletedLessons(items.size(), boardIds);
     }
     @Transactional public void updateMaterials(User teacher, Long id, String homework, String notes) {
-        requireTeacherLesson(teacher, id).updateMaterials(blankToNull(homework), blankToNull(notes));
+        Lesson lesson = requireTeacherLesson(teacher, id);
+        String normalizedHomework = blankToNull(homework);
+        boolean homeworkChanged = !java.util.Objects.equals(lesson.getHomeworkText(), normalizedHomework);
+        lesson.updateMaterials(normalizedHomework, blankToNull(notes));
+        if (homeworkChanged) notifications.homeworkUpdated(lesson);
     }
     @Transactional public void updateMeetingUrl(User teacher, Long id, String meetingUrl) {
         requireTeacherLesson(teacher, id).updateMeetingUrl(normalizeMeetingUrl(meetingUrl));
@@ -169,10 +189,19 @@ public class LessonService {
     public boolean isPast(Lesson lesson) { return lesson.isPast(clock.instant()); }
     public ZoneId zone() { return zone; }
     private void materializeBetween(User user, Instant from, Instant until) {
-        final long weekSeconds = Duration.ofDays(7).toSeconds();
-        List<Lesson> generated = new ArrayList<>();
         List<LessonSeries> relevantSeries = user.getRole() == Role.TEACHER
                 ? seriesRepository.findByTeacher(user) : seriesRepository.findByStudent(user);
+        materializeSeries(relevantSeries, from, until);
+    }
+
+    @Transactional
+    public void materializeAllBetween(Instant from, Instant until) {
+        materializeSeries(seriesRepository.findAll(), from, until);
+    }
+
+    private void materializeSeries(List<LessonSeries> relevantSeries, Instant from, Instant until) {
+        final long weekSeconds = Duration.ofDays(7).toSeconds();
+        List<Lesson> generated = new ArrayList<>();
         for (LessonSeries series : relevantSeries) {
             if (series.getAnchorStartAt().isAfter(until)) continue;
             long secondsToFrom = Duration.between(series.getAnchorStartAt(), from).getSeconds();
@@ -194,6 +223,7 @@ public class LessonService {
         List<Attachment> attachmentsToDelete = new ArrayList<>();
         List<String> attachmentFiles = new ArrayList<>();
         for (Lesson item : lessonsToDelete) {
+            notifications.cancelTransientForDeletedLesson(item.getId());
             List<Attachment> lessonAttachments = attachments.findByLessonOrderByCreatedAtAsc(item);
             attachmentsToDelete.addAll(lessonAttachments);
             for (Attachment attachment : lessonAttachments) {

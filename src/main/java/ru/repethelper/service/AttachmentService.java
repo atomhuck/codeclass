@@ -21,9 +21,12 @@ public class AttachmentService {
     private static final Set<String> BLOCKED = Set.of("exe", "com", "bat", "cmd", "ps1", "sh", "js", "jar", "msi", "scr", "dll");
     private final AttachmentRepository attachments;
     private final LessonService lessonService;
+    private final AppNotificationService notifications;
     private final Path root;
-    public AttachmentService(AttachmentRepository attachments, LessonService lessonService, @Value("${app.storage-path}") String path) {
-        this.attachments = attachments; this.lessonService = lessonService; this.root = Paths.get(path).toAbsolutePath().normalize();
+    public AttachmentService(AttachmentRepository attachments, LessonService lessonService,
+                             AppNotificationService notifications, @Value("${app.storage-path}") String path) {
+        this.attachments = attachments; this.lessonService = lessonService; this.notifications = notifications;
+        this.root = Paths.get(path).toAbsolutePath().normalize();
     }
     @PostConstruct void init() throws IOException { Files.createDirectories(root); }
 
@@ -37,6 +40,7 @@ public class AttachmentService {
         long current = attachments.countByLessonAndCategory(lesson, category);
         if (current + actual.size() > MAX_PER_CATEGORY) throw new IllegalArgumentException("В одном разделе может быть не более 5 файлов");
         for (MultipartFile file : actual) storeOne(lesson, category, file);
+        if (!actual.isEmpty() && category == AttachmentCategory.HOMEWORK) notifications.homeworkUpdated(lesson);
     }
 
     private void storeOne(Lesson lesson, AttachmentCategory category, MultipartFile file) {

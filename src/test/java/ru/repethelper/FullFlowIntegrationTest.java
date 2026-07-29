@@ -19,6 +19,8 @@ import ru.repethelper.domain.*;
 import ru.repethelper.repository.*;
 import ru.repethelper.service.*;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -44,6 +46,7 @@ class FullFlowIntegrationTest {
         registry.add("app.teacher.name", () -> "Иван Петрович");
         registry.add("app.teacher.code", () -> "teacher_code");
         registry.add("app.account-gate-enabled", () -> "true");
+        registry.add("app.notifications.initial-delay-ms", () -> "3600000");
     }
 
     @Autowired WebApplicationContext context;
@@ -63,6 +66,8 @@ class FullFlowIntegrationTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired VkAuthService vkAuth;
     @Autowired ExternalIdentityRepository externalIdentities;
+    @Autowired EmailNotificationRepository emailNotifications;
+    @Autowired LessonReminderService lessonReminders;
     private MockMvc mvc;
 
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
@@ -475,5 +480,85 @@ class FullFlowIntegrationTest {
         User changed = accounts.requireByUsername("password_reset_code");
         assertThat(passwordEncoder.matches("ChangedPassword123", changed.getPasswordHash())).isTrue();
         assertThat(accountTokens.resetPassword("password_reset_code", resetCode, "AnotherPassword123")).isFalse();
+    }
+
+    @Test
+    void studentCanConnectToSeveralTeachersWithoutBreakingIsolation() {
+        User teacherA = verified(accounts.register("Преподаватель A", "multi_teacher_a",
+                "multi.teacher.a@example.test", "TeacherPassword123", Role.TEACHER, true));
+        User teacherB = verified(accounts.register("Преподаватель B", "multi_teacher_b",
+                "multi.teacher.b@example.test", "TeacherPassword123", Role.TEACHER, true));
+        User student = verified(accounts.register("Общий ученик", "multi_student",
+                "multi.student@example.test", "StudentPassword123", Role.STUDENT, true));
+
+        connections.send(student, profiles.requireFor(teacherA).getInviteCode());
+        connections.send(student, profiles.requireFor(teacherB).getInviteCode());
+        List<ConnectionRequest> pending = requestRepository.findByStudentOrderByCreatedAtDesc(student);
+        assertThat(pending).hasSize(2).allMatch(item -> item.getStatus() == ConnectionStatus.PENDING);
+
+        pending.forEach(item -> connections.process(item.getTeacher(), item.getId(), true));
+        assertThat(requestRepository.findByStudentOrderByCreatedAtDesc(student))
+                .hasSize(2).allMatch(item -> item.getStatus() == ConnectionStatus.ACCEPTED);
+        assertThatThrownBy(() -> connections.send(student, profiles.requireFor(teacherA).getInviteCode()))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("этому преподавателю");
+
+        Lesson lessonA = lessons.create(teacherA, student.getId(),
+                LocalDateTime.of(2026, 11, 2, 16, 0), 60);
+        Lesson lessonB = lessons.create(teacherB, student.getId(),
+                LocalDateTime.of(2026, 11, 3, 17, 0), 60);
+        assertThat(lessons.forMonth(student, java.time.YearMonth.of(2026, 11)))
+                .contains(lessonA, lessonB);
+        assertThatThrownBy(() -> lessons.requireTeacherLesson(teacherA, lessonB.getId()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((org.springframework.web.server.ResponseStatusException) ex)
+                        .getStatusCode().value()).isEqualTo(403));
+
+        studentRemovals.remove(teacherA, student.getId());
+        assertThat(requestRepository.existsByStudentAndTeacherAndStatus(
+                student, teacherA, ConnectionStatus.ACCEPTED)).isFalse();
+        assertThat(requestRepository.existsByStudentAndTeacherAndStatus(
+                student, teacherB, ConnectionStatus.ACCEPTED)).isTrue();
+        assertThat(lessonRepository.findById(lessonA.getId())).isEmpty();
+        assertThat(lessonRepository.findById(lessonB.getId())).isPresent();
+        assertThat(users.findById(student.getId())).isPresent();
+    }
+
+    @Test
+    void notificationOutboxDeduplicatesHomeworkAndFourHourReminder() {
+        User teacher = verified(accounts.register("Почтовый преподаватель", "mail_teacher",
+                "mail.teacher@example.test", "TeacherPassword123", Role.TEACHER, true));
+        User student = verified(accounts.register("Почтовый ученик", "mail_student",
+                "mail.student@example.test", "StudentPassword123", Role.STUDENT, true));
+        connections.send(student, profiles.requireFor(teacher).getInviteCode());
+        ConnectionRequest request = requestRepository.findByStudentOrderByCreatedAtDesc(student).getFirst();
+        connections.process(teacher, request.getId(), true);
+
+        Instant start = Instant.now().plus(Duration.ofHours(3));
+        Lesson lesson = lessons.create(teacher, student.getId(),
+                LocalDateTime.ofInstant(start, ZoneId.of("Europe/Moscow")), 60);
+        lessons.updateMaterials(teacher, lesson.getId(), "Решить задачи 1–5", null);
+        attachments.store(teacher, lesson.getId(), AttachmentCategory.HOMEWORK, List.of(
+                new MockMultipartFile("files", "tasks.pdf", "application/pdf", new byte[]{1, 2, 3})));
+        lessonReminders.enqueueUpcomingReminders();
+        lessonReminders.enqueueUpcomingReminders();
+
+        assertThat(emailNotifications.findAll().stream()
+                .filter(item -> item.getType() == EmailNotificationType.HOMEWORK_UPDATED)
+                .filter(item -> item.getRecipientEmail().equals(student.getEmail())).toList()).hasSize(1);
+        assertThat(emailNotifications.findAll().stream()
+                .filter(item -> item.getType() == EmailNotificationType.LESSON_REMINDER)
+                .filter(item -> item.getRecipientEmail().equals(student.getEmail())).toList()).hasSize(1);
+        assertThat(emailNotifications.findAll())
+                .anyMatch(item -> item.getType() == EmailNotificationType.CONNECTION_REQUEST_RECEIVED
+                        && item.getRecipientEmail().equals(teacher.getEmail()))
+                .anyMatch(item -> item.getType() == EmailNotificationType.CONNECTION_ACCEPTED
+                        && item.getRecipientEmail().equals(student.getEmail()))
+                .anyMatch(item -> item.getType() == EmailNotificationType.LESSON_CREATED
+                        && item.getRecipientEmail().equals(student.getEmail()));
+    }
+
+    private User verified(User user) {
+        user.verifyEmail();
+        return users.save(user);
     }
 }

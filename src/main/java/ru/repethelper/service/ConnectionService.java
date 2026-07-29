@@ -12,8 +12,10 @@ import java.util.List;
 public class ConnectionService {
     private final ConnectionRequestRepository requests;
     private final TeacherProfileRepository profiles;
-    public ConnectionService(ConnectionRequestRepository requests, TeacherProfileRepository profiles) {
-        this.requests = requests; this.profiles = profiles;
+    private final AppNotificationService notifications;
+    public ConnectionService(ConnectionRequestRepository requests, TeacherProfileRepository profiles,
+                             AppNotificationService notifications) {
+        this.requests = requests; this.profiles = profiles; this.notifications = notifications;
     }
 
     @Transactional
@@ -28,11 +30,12 @@ public class ConnectionService {
         if (student.getRole() != Role.STUDENT) throw new IllegalArgumentException("Запрос может отправить только ученик");
         User teacher = profiles.findByUserId(teacherId).map(TeacherProfile::getUser)
                 .orElseThrow(() -> new IllegalArgumentException("Преподаватель не найден"));
-        if (requests.existsByStudentAndStatus(student, ConnectionStatus.ACCEPTED))
-            throw new IllegalArgumentException("Вы уже прикреплены к преподавателю");
+        if (requests.existsByStudentAndTeacherAndStatus(student, teacher, ConnectionStatus.ACCEPTED))
+            throw new IllegalArgumentException("Вы уже прикреплены к этому преподавателю");
         if (requests.existsByStudentAndTeacherAndStatus(student, teacher, ConnectionStatus.PENDING))
             throw new IllegalArgumentException("Запрос уже ожидает решения");
-        requests.save(new ConnectionRequest(student, teacher));
+        ConnectionRequest request = requests.save(new ConnectionRequest(student, teacher));
+        notifications.connectionRequested(request);
     }
 
     @Transactional
@@ -41,9 +44,8 @@ public class ConnectionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (!request.getTeacher().getId().equals(teacher.getId())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (request.getStatus() != ConnectionStatus.PENDING) throw new IllegalArgumentException("Запрос уже обработан");
-        if (accept && requests.existsByStudentAndStatus(request.getStudent(), ConnectionStatus.ACCEPTED))
-            throw new IllegalArgumentException("Ученик уже прикреплён к преподавателю");
         if (accept) request.accept(); else request.reject();
+        notifications.connectionProcessed(request);
     }
 
     @Transactional(readOnly = true)
@@ -64,10 +66,9 @@ public class ConnectionService {
         TeacherProfile profile = profiles.findByUserId(teacherId).orElseThrow(() -> new IllegalArgumentException("Преподаватель не найден"));
         User teacher = profile.getUser();
         if (requests.existsByStudentAndTeacherAndStatus(student, teacher, ConnectionStatus.ACCEPTED)) return InviteState.CONNECTED;
-        if (requests.existsByStudentAndStatus(student, ConnectionStatus.ACCEPTED)) return InviteState.CONNECTED_TO_OTHER;
         if (requests.existsByStudentAndTeacherAndStatus(student, teacher, ConnectionStatus.PENDING)) return InviteState.PENDING;
         return InviteState.READY;
     }
 
-    public enum InviteState { READY, PENDING, CONNECTED, CONNECTED_TO_OTHER }
+    public enum InviteState { READY, PENDING, CONNECTED }
 }
