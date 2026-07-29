@@ -3,6 +3,7 @@ package ru.repethelper.domain;
 import jakarta.persistence.*;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "lessons")
@@ -25,6 +26,9 @@ public class Lesson {
     private LessonStatus status;
     @Column(name = "homework_text", columnDefinition = "text")
     private String homeworkText;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "homework_submission_status", nullable = false, length = 20)
+    private HomeworkSubmissionStatus homeworkSubmissionStatus = HomeworkSubmissionStatus.NOT_MARKED;
     @Column(name = "lesson_notes_text", columnDefinition = "text")
     private String lessonNotesText;
     @Column(name = "teacher_private_note", columnDefinition = "text")
@@ -55,6 +59,7 @@ public class Lesson {
     public int getDurationMinutes() { return durationMinutes; }
     public LessonStatus getStatus() { return status; }
     public String getHomeworkText() { return homeworkText; }
+    public HomeworkSubmissionStatus getHomeworkSubmissionStatus() { return homeworkSubmissionStatus; }
     public String getLessonNotesText() { return lessonNotesText; }
     public String getTeacherPrivateNote() { return teacherPrivateNote; }
     public String getMeetingUrl() { return meetingUrl; }
@@ -64,6 +69,10 @@ public class Lesson {
     public boolean isPast(Instant now) { return status != LessonStatus.CANCELLED && !getEndAt().isAfter(now); }
     public void reschedule(Instant startAt, int durationMinutes) { this.startAt = startAt; this.durationMinutes = durationMinutes; touch(); }
     public void updateMaterials(String homeworkText, String notesText) { this.homeworkText = homeworkText; this.lessonNotesText = notesText; touch(); }
+    public void updateHomeworkSubmissionStatus(HomeworkSubmissionStatus status) {
+        this.homeworkSubmissionStatus = Objects.requireNonNull(status);
+        touch();
+    }
     public void updateTeacherPrivateNote(String teacherPrivateNote) { this.teacherPrivateNote = teacherPrivateNote; touch(); }
     public void updateMeetingUrl(String meetingUrl) { this.meetingUrl = meetingUrl; touch(); }
     public void cancel() { this.status = LessonStatus.CANCELLED; touch(); }

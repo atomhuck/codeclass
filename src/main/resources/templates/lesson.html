@@ -64,6 +64,23 @@
         <div class="save-bar"><span>Домашку и материалы видит ученик</span><button class="button primary" type="submit">Сохранить материалы</button></div>
     </form>
 
+    <section th:if="${user.role.name() == 'TEACHER'}" class="panel homework-status-card">
+        <div class="panel-heading">
+            <div><p class="eyebrow">Учёт выполнения</p><h2>Ученик сдал домашнюю работу?</h2></div>
+            <span class="homework-status-pill not-marked" th:if="${lesson.homeworkSubmissionStatus.name() == 'NOT_MARKED'}">Не отмечено</span>
+            <span class="homework-status-pill submitted" th:if="${lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}">Сдал</span>
+            <span class="homework-status-pill not-submitted" th:if="${lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}">Не сдал</span>
+        </div>
+        <form th:action="@{/teacher/lessons/{id}/homework-status(id=${lesson.id})}" method="post" class="homework-status-actions">
+            <button type="submit" name="status" value="SUBMITTED" class="homework-status-button submitted"
+                    th:classappend="${lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'} ? ' active'">✓ Сдал</button>
+            <button type="submit" name="status" value="NOT_SUBMITTED" class="homework-status-button not-submitted"
+                    th:classappend="${lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'} ? ' active'">× Не сдал</button>
+            <button type="submit" name="status" value="NOT_MARKED" class="homework-status-button reset"
+                    th:classappend="${lesson.homeworkSubmissionStatus.name() == 'NOT_MARKED'} ? ' active'">Не отмечено</button>
+        </form>
+    </section>
+
     <form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/private-note(id=${lesson.id})}"
           th:object="${privateNoteForm}" method="post" class="panel private-note-card">
         <input type="hidden" name="returnToStudent" th:value="${fromStudentCard}">

@@ -8,6 +8,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import ru.repethelper.domain.User;
+import ru.repethelper.domain.HomeworkSubmissionStatus;
 import ru.repethelper.service.AccountService;
 import ru.repethelper.service.LessonService;
 import ru.repethelper.service.TeacherStudentOverviewService;
@@ -80,6 +81,22 @@ public class TeacherStudentController {
             }
         }
         return "redirect:/lessons/" + lessonId + (returnToStudent ? "?from=student" : "");
+    }
+
+    @PostMapping("/lessons/{lessonId}/homework-status")
+    String updateHomeworkStatus(Authentication auth, @PathVariable Long lessonId,
+                                @RequestParam HomeworkSubmissionStatus status,
+                                @RequestParam(defaultValue = "false") boolean returnToStudentCard,
+                                RedirectAttributes flash) {
+        var lesson = lessons.updateHomeworkSubmissionStatus(current(auth), lessonId, status);
+        flash.addFlashAttribute("success", switch (status) {
+            case SUBMITTED -> "Отмечено: ученик сдал домашнюю работу";
+            case NOT_SUBMITTED -> "Отмечено: ученик не сдал домашнюю работу";
+            case NOT_MARKED -> "Отметка о домашней работе сброшена";
+        });
+        return returnToStudentCard
+                ? "redirect:/teacher/students/" + lesson.getStudent().getId()
+                : "redirect:/lessons/" + lessonId;
     }
 
     private String linkify(String value) {

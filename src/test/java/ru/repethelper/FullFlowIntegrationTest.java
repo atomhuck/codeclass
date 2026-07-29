@@ -600,6 +600,7 @@ class FullFlowIntegrationTest {
         var overviewB = teacherStudentOverviews.get(teacherB, student.getId(), 0, 0);
         assertThat(overviewA.nearest().getId()).isEqualTo(nearest.getId());
         assertThat(overviewA.previous().getId()).isEqualTo(previous.getId());
+        assertThat(overviewA.previous().getHomeworkSubmissionStatus()).isEqualTo(HomeworkSubmissionStatus.NOT_MARKED);
         assertThat(overviewA.materialFiles()).extracting(Attachment::getOriginalName)
                 .containsExactly("lesson-material.pdf");
         assertThat(overviewA.relation().getTeacherStudentDescription()).isEqualTo("Описание только преподавателя A");
@@ -622,7 +623,26 @@ class FullFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Материал последнего занятия")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ"))));
+                        org.hamcrest.Matchers.containsString("СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Ученик сдал домашнюю работу?"))));
+
+        mvc.perform(post("/teacher/lessons/{id}/homework-status", previous.getId())
+                        .with(user(teacherA.getUsername()).roles("TEACHER")).with(csrf())
+                        .param("status", "SUBMITTED").param("returnToStudentCard", "true"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/teacher/students/" + student.getId()));
+        assertThat(lessonRepository.findById(previous.getId()).orElseThrow().getHomeworkSubmissionStatus())
+                .isEqualTo(HomeworkSubmissionStatus.SUBMITTED);
+        assertThat(emailNotifications.findAll()).hasSize(queuedBeforePrivateUpdates);
+
+        mvc.perform(get("/teacher/students/{id}", student.getId())
+                        .with(user(teacherA.getUsername()).roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "С предыдущего занятия · только для преподавателя")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "homework-status-button submitted active")));
 
         mvc.perform(post("/teacher/lessons/{id}/private-note", previous.getId())
                         .with(user(student.getUsername()).roles("STUDENT")).with(csrf())
@@ -632,8 +652,14 @@ class FullFlowIntegrationTest {
                         .with(user(teacherB.getUsername()).roles("TEACHER")).with(csrf())
                         .param("note", "Попытка чужого преподавателя"))
                 .andExpect(status().isForbidden());
+        mvc.perform(post("/teacher/lessons/{id}/homework-status", previous.getId())
+                        .with(user(teacherB.getUsername()).roles("TEACHER")).with(csrf())
+                        .param("status", "NOT_SUBMITTED"))
+                .andExpect(status().isForbidden());
         assertThat(lessonRepository.findById(previous.getId()).orElseThrow().getTeacherPrivateNote())
                 .isEqualTo("СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ");
+        assertThat(lessonRepository.findById(previous.getId()).orElseThrow().getHomeworkSubmissionStatus())
+                .isEqualTo(HomeworkSubmissionStatus.SUBMITTED);
 
         assertThatThrownBy(() -> teacherStudentOverviews.updateDescription(
                 teacherA, student.getId(), "x".repeat(5_001)))

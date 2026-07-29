@@ -76,6 +76,18 @@
                 <h3 th:text="${@timeView.dateTime(overview.previous.startAt)}">30 июля, 17:00</h3>
                 <p th:text="${overview.previous.durationMinutes + ' минут' + (overview.previous.recurring ? ' · еженедельно' : '')}">60 минут</p>
                 <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.previous.id},from='student')}">Открыть занятие</a>
+                <div class="profile-homework-status">
+                    <p>Ученик сдал домашнюю работу?</p>
+                    <form th:action="@{/teacher/lessons/{id}/homework-status(id=${overview.previous.id})}" method="post" class="homework-status-actions">
+                        <input type="hidden" name="returnToStudentCard" value="true">
+                        <button type="submit" name="status" value="SUBMITTED" class="homework-status-button submitted"
+                                th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'SUBMITTED'} ? ' active'">✓ Сдал</button>
+                        <button type="submit" name="status" value="NOT_SUBMITTED" class="homework-status-button not-submitted"
+                                th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'} ? ' active'">× Не сдал</button>
+                        <button type="submit" name="status" value="NOT_MARKED" class="homework-status-button reset"
+                                th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'NOT_MARKED'} ? ' active'">Не отмечено</button>
+                    </form>
+                </div>
             </div>
         </article>
 
@@ -94,7 +106,7 @@
         </article>
 
         <article class="panel student-overview-card private-overview-card">
-            <div class="panel-heading"><div><p class="eyebrow">Только для преподавателя</p><h2>Личная заметка</h2></div><span class="private-badge">Приватно</span></div>
+            <div class="panel-heading"><div><p class="eyebrow">С предыдущего занятия · только для преподавателя</p><h2>Личная заметка</h2></div><span class="private-badge">Приватно</span></div>
             <div th:if="${overview.previous == null}" class="empty compact"><p>Проведённых занятий пока нет.</p></div>
             <div th:if="${overview.previous != null}">
                 <div class="private-note-view" th:classappend="${overview.previous.teacherPrivateNote == null} ? 'empty-text'"
@@ -111,7 +123,7 @@
             <div class="date-chip"><strong th:text="${@timeView.day(row.lesson.startAt)}">01</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">авг</small></div>
             <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">1 августа, 17:00</b><span th:text="${row.lesson.durationMinutes + ' минут'}">60 минут</span></div>
             <div class="lesson-indicators">
-                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
             </div>
             <span class="arrow">→</span>
         </a>
@@ -131,7 +143,7 @@
             <div class="date-chip muted-date"><strong th:text="${@timeView.day(row.lesson.startAt)}">30</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">июл</small></div>
             <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">30 июля, 17:00</b><span th:text="${row.lesson.status.name() == 'CANCELLED' ? 'Отменено' : row.lesson.durationMinutes + ' минут · проведено'}">Проведено</span></div>
             <div class="lesson-indicators">
-                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
             </div>
             <span class="arrow">→</span>
         </a>

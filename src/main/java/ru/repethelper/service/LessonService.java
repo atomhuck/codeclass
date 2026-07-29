@@ -149,6 +149,13 @@ public class LessonService {
         requireTeacherLesson(teacher, id).updateTeacherPrivateNote(normalized);
     }
 
+    @Transactional
+    public Lesson updateHomeworkSubmissionStatus(User teacher, Long id, HomeworkSubmissionStatus status) {
+        Lesson lesson = requireTeacherLesson(teacher, id);
+        lesson.updateHomeworkSubmissionStatus(status);
+        return lesson;
+    }
+
     @Transactional(readOnly = true)
     public Lesson requireAccessible(User user, Long id) {
         Lesson lesson = lessons.findWithStudentById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));

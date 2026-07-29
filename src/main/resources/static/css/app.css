@@ -123,7 +123,7 @@ h2 { margin-bottom: .4rem; font-size: 1.25rem; letter-spacing: -.025em; }
 .cookie-notice a { color: var(--cyan); }
 @media (max-width: 560px) { .cookie-notice { align-items: stretch; flex-direction: column; } }
 input,select,textarea { width: 100%; border: 1px solid #29354a; border-radius: 10px; outline: none; color: var(--text); background: #0b101b; }
-input,select { height: 44px; padding: 0 13px; } textarea { padding: 14px; resize: vertical; line-height: 1.65; }
+input,select { height: 44px; padding: 0 13px; } textarea { padding: 14px; resize: none; line-height: 1.65; }
 input:focus,select:focus,textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(69,216,255,.08); }
 .code-input { text-align: center; font: 700 1.35rem "JetBrains Mono", monospace; letter-spacing: .42em; padding-left: calc(13px + .42em); }
 label small { color: var(--danger); font-weight: 400; }
@@ -252,11 +252,26 @@ input,select,textarea { border-color:var(--line); color:var(--text); background:
 .lesson-indicators { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
 .lesson-indicators span { padding:4px 7px; border-radius:99px; color:var(--muted); background:var(--surface-2); font-size:.65rem; white-space:nowrap; }
 .lesson-indicators .private-indicator { color:var(--violet); }
+.lesson-indicators .submitted-indicator { color:var(--green); }
+.lesson-indicators .not-submitted-indicator { color:var(--danger); }
 .student-lesson-row.history-row { opacity:.75; }
 .student-lesson-row.cancelled { opacity:.48; text-decoration:line-through; }
 .muted-date { filter:grayscale(1); }
 .profile-pagination { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:17px; padding-top:16px; border-top:1px solid var(--line); }
 .profile-pagination span { color:var(--muted); font-size:.75rem; }
+.homework-status-card { margin-bottom:18px; padding:23px; }
+.homework-status-pill { display:inline-flex; align-items:center; min-height:29px; padding:0 10px; border:1px solid var(--line); border-radius:99px; font-size:.7rem; font-weight:750; white-space:nowrap; }
+.homework-status-pill.not-marked { color:var(--muted); background:var(--surface-2); }
+.homework-status-pill.submitted { color:var(--green); border-color:color-mix(in srgb,var(--green) 35%,var(--line)); background:color-mix(in srgb,var(--green) 9%,transparent); }
+.homework-status-pill.not-submitted { color:var(--danger); border-color:color-mix(in srgb,var(--danger) 35%,var(--line)); background:color-mix(in srgb,var(--danger) 8%,transparent); }
+.homework-status-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.homework-status-button { min-height:39px; padding:0 14px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:var(--surface-2); font-weight:700; cursor:pointer; transition:.16s ease; }
+.homework-status-button:hover { transform:translateY(-1px); border-color:var(--cyan); color:var(--text); }
+.homework-status-button.submitted.active { color:var(--green); border-color:color-mix(in srgb,var(--green) 55%,var(--line)); background:color-mix(in srgb,var(--green) 12%,var(--surface)); }
+.homework-status-button.not-submitted.active { color:var(--danger); border-color:color-mix(in srgb,var(--danger) 55%,var(--line)); background:color-mix(in srgb,var(--danger) 10%,var(--surface)); }
+.homework-status-button.reset.active { color:var(--text); border-color:var(--muted); }
+.profile-homework-status { margin-top:17px; padding-top:15px; border-top:1px solid var(--line); }
+.profile-homework-status > p { margin-bottom:9px; color:var(--text); font-size:.78rem; font-weight:700; }
 
 @media (max-width: 768px) {
   .topbar { height:60px; }.nav-links { display:none; }.page { padding-bottom:104px; }
@@ -283,8 +298,10 @@ input,select,textarea { border-color:var(--line); color:var(--text); background:
   .student-profile-identity { align-items:flex-start; }.student-profile-avatar { width:48px; height:48px; flex-basis:48px; }
   .student-profile-actions { display:grid; grid-template-columns:1fr; }
   .student-description-card,.student-overview-card,.private-note-card,.student-lessons-section { padding:18px; }
+  .homework-status-card { padding:18px; }
   .student-description-actions { align-items:stretch; flex-direction:column; }.student-description-actions .button { width:100%; }
   .student-overview-card .panel-heading { gap:9px; flex-direction:column; }
   .student-lesson-row { gap:10px; }.lesson-indicators { grid-column:1/-1; }.student-lesson-row > .arrow { grid-column:3; grid-row:1; }
   .profile-pagination { justify-content:space-between; flex-wrap:wrap; }.profile-pagination span { order:-1; width:100%; text-align:center; }
+  .homework-status-card .panel-heading { gap:10px; flex-direction:column; }.homework-status-actions { display:grid; grid-template-columns:1fr 1fr; }.homework-status-button.reset { grid-column:1/-1; }
 }

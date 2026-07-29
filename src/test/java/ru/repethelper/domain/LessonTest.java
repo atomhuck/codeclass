@@ -38,4 +38,13 @@ class LessonTest {
         assertThat(lesson.getLessonNotesText()).isEqualTo("Материалы для ученика");
         assertThat(lesson.getTeacherPrivateNote()).isEqualTo("Личная запись преподавателя");
     }
+
+    @Test void homeworkSubmissionStartsUnmarkedAndCanBeChanged() {
+        Lesson lesson = new Lesson(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60);
+        assertThat(lesson.getHomeworkSubmissionStatus()).isEqualTo(HomeworkSubmissionStatus.NOT_MARKED);
+        lesson.updateHomeworkSubmissionStatus(HomeworkSubmissionStatus.SUBMITTED);
+        assertThat(lesson.getHomeworkSubmissionStatus()).isEqualTo(HomeworkSubmissionStatus.SUBMITTED);
+        lesson.updateHomeworkSubmissionStatus(HomeworkSubmissionStatus.NOT_SUBMITTED);
+        assertThat(lesson.getHomeworkSubmissionStatus()).isEqualTo(HomeworkSubmissionStatus.NOT_SUBMITTED);
+    }
 }
