@@ -20,4 +20,8 @@ class TextLinkifierTest {
                 .doesNotContain("<script>")
                 .contains("&lt;script&gt;");
     }
+
+    @Test void preservesOrdinaryUnicodeCharacters() {
+        assertThat(linkifier.linkify("Задачи 1–5")).isEqualTo("Задачи 1–5");
+    }
 }

@@ -1,7 +1,6 @@
 package ru.repethelper.web;
 
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.HtmlUtils;
 
 import java.net.URI;
 import java.util.regex.Matcher;
@@ -24,8 +23,8 @@ public class TextLinkifier {
                 html.append(escapeWithBreaks(matcher.group()));
             } else {
                 String href = toHref(visibleUrl);
-                html.append("<a href=\"").append(HtmlUtils.htmlEscape(href)).append("\" target=\"_blank\" rel=\"noopener noreferrer nofollow\">")
-                        .append(HtmlUtils.htmlEscape(visibleUrl)).append("</a>");
+                html.append("<a href=\"").append(escapeHtml(href)).append("\" target=\"_blank\" rel=\"noopener noreferrer nofollow\">")
+                        .append(escapeHtml(visibleUrl)).append("</a>");
                 html.append(escapeWithBreaks(matcher.group().substring(visibleUrl.length())));
             }
             cursor = matcher.end();
@@ -47,5 +46,9 @@ public class TextLinkifier {
         while (end > 0 && TRAILING_PUNCTUATION.indexOf(value.charAt(end - 1)) >= 0) end--;
         return value.substring(0, end);
     }
-    private String escapeWithBreaks(String value) { return HtmlUtils.htmlEscape(value).replace("\r\n", "\n").replace("\n", "<br>"); }
+    private String escapeWithBreaks(String value) { return escapeHtml(value).replace("\r\n", "\n").replace("\n", "<br>"); }
+    private String escapeHtml(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&#39;");
+    }
 }
