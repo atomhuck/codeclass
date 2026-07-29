@@ -11,7 +11,7 @@
     <section class="connect-card panel">
         <div class="connect-visual"><span>RH</span></div>
         <div><p class="eyebrow">Подключение</p><h2>Добавить преподавателя</h2><p>Введите код преподавателя. После принятия заявки его занятия появятся в общем расписании.</p>
-            <form th:action="@{/student/requests}" th:object="${connectionForm}" method="post" class="connect-form"><input th:field="*{inviteCode}" required placeholder="T-XXXXXXXX"><button class="button primary" type="submit">Отправить запрос</button></form>
+            <form th:action="@{/student/requests}" th:object="${connectionForm}" method="post" class="connect-form"><input th:field="*{inviteCode}" required placeholder="T-XXXXXXXX" autocomplete="off" data-no-restore-focus><button class="button primary" type="submit">Отправить запрос</button></form>
         </div>
     </section>
 

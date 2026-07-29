@@ -36,4 +36,13 @@
       if (!menu.contains(event.target)) menu.removeAttribute("open");
     });
   });
+  // Mobile browsers may restore focus to a form input after a page reload.
+  // The invitation-code field is optional on an already connected student's dashboard,
+  // so suppressing that restored focus avoids opening the software keyboard on load.
+  window.addEventListener("pageshow", () => {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (active?.matches?.("[data-no-restore-focus]")) active.blur();
+    }, 0);
+  });
 })();
