@@ -29,6 +29,49 @@
         </form>
     </section>
 
+    <section th:if="${user.role.name() == 'TEACHER'}" class="panel finance-card">
+        <div class="finance-summary">
+            <div>
+                <p class="eyebrow">Только для преподавателя</p>
+                <h2>Стоимость и оплата</h2>
+                <strong class="finance-amount" th:text="${@timeView.money(lesson.priceRubles)}">1 500 ₽</strong>
+            </div>
+            <span class="payment-pill no-price" th:if="${lesson.paymentStatus.name() == 'NO_PRICE'}">Цена не указана</span>
+            <span class="payment-pill unpaid" th:if="${lesson.paymentStatus.name() == 'UNPAID'}">Не оплачено</span>
+            <span class="payment-pill paid" th:if="${lesson.paymentStatus.name() == 'PAID'}">✓ Оплачено</span>
+        </div>
+        <div class="finance-actions">
+            <form th:action="@{/teacher/lessons/{id}/payment-status(id=${lesson.id})}" method="post" class="payment-actions">
+                <button class="payment-button paid" type="submit" name="status" value="PAID"
+                        th:disabled="${lesson.priceRubles == null}"
+                        th:classappend="${lesson.paymentStatus.name() == 'PAID'} ? ' active'">✓ Оплачено</button>
+                <button class="payment-button unpaid" type="submit" name="status" value="UNPAID"
+                        th:disabled="${lesson.priceRubles == null}"
+                        th:classappend="${lesson.paymentStatus.name() == 'UNPAID'} ? ' active'">Не оплачено</button>
+            </form>
+            <small th:if="${lesson.priceRubles == null}">Сначала назначьте стоимость занятия.</small>
+        </div>
+        <details class="finance-editor">
+            <summary class="button secondary">Изменить стоимость</summary>
+            <form class="stack-form price-update-form" th:action="@{/teacher/lessons/{id}/price(id=${lesson.id})}"
+                  th:object="${priceForm}" method="post"
+                  th:data-paid="${lesson.paymentStatus.name() == 'PAID'}"
+                  th:data-current-price="${lesson.priceRubles}">
+                <label>Новая стоимость
+                    <span class="money-input"><input type="number" inputmode="numeric" min="1" max="1000000" step="1"
+                                                     th:field="*{priceRubles}" placeholder="Цена не указана"><span>₽</span></span>
+                </label>
+                <fieldset th:if="${lesson.recurring}" class="choice-fieldset">
+                    <legend>Применить изменение</legend>
+                    <label class="choice-card"><input type="radio" th:field="*{scope}" value="SINGLE"><span><b>Только к этому</b><small>Остальные занятия сохранят свою стоимость</small></span></label>
+                    <label class="choice-card"><input type="radio" th:field="*{scope}" value="FOLLOWING"><span><b>К этому и последующим</b><small>Оплаченные встречи останутся без изменений</small></span></label>
+                </fieldset>
+                <input class="paid-change-confirmation" type="hidden" th:field="*{confirmPaidPriceChange}">
+                <div class="finance-editor-footer"><small>Оставьте поле пустым, чтобы убрать стоимость.</small><button class="button primary" type="submit">Сохранить стоимость</button></div>
+            </form>
+        </details>
+    </section>
+
     <section class="panel board-card">
         <div class="board-card-visual" aria-hidden="true">
             <span class="board-grid-mark">RH</span>
@@ -112,6 +155,20 @@
     </section>
     <form th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" th:action="@{/teacher/lessons/{id}/delete(id=${lesson.id})}" method="post" class="danger-zone"><div><b>Удалить из расписания</b><span class="danger-hint">Занятие, его заметки и вложения исчезнут безвозвратно.</span><fieldset th:if="${lesson.recurring}" class="scope-inline"><legend>Применить</legend><label><input type="radio" name="scope" value="SINGLE" checked> только к этому занятию</label><label><input type="radio" name="scope" value="FOLLOWING"> к этому и всем последующим</label></fieldset></div><button class="button danger-button" type="submit">Удалить</button></form>
     <script>
+        document.querySelector(".price-update-form")?.addEventListener("submit", event => {
+            const form = event.currentTarget;
+            const currentPrice = form.dataset.currentPrice || '';
+            const nextPrice = form.querySelector('input[name="priceRubles"]').value;
+            const scope = form.querySelector('input[name="scope"]:checked')?.value || 'SINGLE';
+            if (form.dataset.paid === "true" && scope === "SINGLE" && currentPrice !== nextPrice) {
+                const confirmed = confirm("Стоимость оплаченного занятия изменится, а отметка «Оплачено» будет сброшена. Продолжить?");
+                if (!confirmed) {
+                    event.preventDefault();
+                    return;
+                }
+                form.querySelector(".paid-change-confirmation").value = "true";
+            }
+        });
         document.querySelectorAll(".upload-form").forEach(form => {
             const input = form.querySelector('input[type="file"]');
             const label = form.querySelector(".file-picker-label");

@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,6 +30,9 @@ public class LessonSeries {
     @Column(name = "duration_minutes", nullable = false)
     private int durationMinutes;
 
+    @Column(name = "base_price_rubles")
+    private Integer basePriceRubles;
+
     @Column(name = "cancelled_from_index")
     private Integer cancelledFromIndex;
 
@@ -41,13 +47,21 @@ public class LessonSeries {
     @Column(name = "occurrence_index", nullable = false)
     private Set<Integer> excludedOccurrenceIndexes = new HashSet<>();
 
+    @OneToMany(mappedBy = "series", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<LessonSeriesPriceChange> priceChanges = new ArrayList<>();
+
     protected LessonSeries() {}
 
     public LessonSeries(User teacher, User student, Instant anchorStartAt, int durationMinutes) {
+        this(teacher, student, anchorStartAt, durationMinutes, null);
+    }
+
+    public LessonSeries(User teacher, User student, Instant anchorStartAt, int durationMinutes, Integer basePriceRubles) {
         this.teacher = teacher;
         this.student = student;
         this.anchorStartAt = anchorStartAt;
         this.durationMinutes = durationMinutes;
+        this.basePriceRubles = basePriceRubles;
         this.createdAt = Instant.now();
         this.updatedAt = createdAt;
     }
@@ -57,11 +71,31 @@ public class LessonSeries {
     public User getTeacher() { return teacher; }
     public Instant getAnchorStartAt() { return anchorStartAt; }
     public int getDurationMinutes() { return durationMinutes; }
+    public Integer getBasePriceRubles() { return basePriceRubles; }
     public Integer getCancelledFromIndex() { return cancelledFromIndex; }
     public Instant occurrenceStart(int index) { return anchorStartAt.plus(Duration.ofDays(7L * index)); }
     public boolean includes(int index) {
         return (cancelledFromIndex == null || index < cancelledFromIndex)
                 && !excludedOccurrenceIndexes.contains(index);
+    }
+
+    public Integer priceAt(int occurrenceIndex) {
+        LessonSeriesPriceChange effective = priceChanges.stream()
+                .filter(change -> change.getEffectiveOccurrenceIndex() <= occurrenceIndex)
+                .max(Comparator.comparingInt(LessonSeriesPriceChange::getEffectiveOccurrenceIndex))
+                .orElse(null);
+        return effective == null ? basePriceRubles : effective.getPriceRubles();
+    }
+
+    public void changePriceFrom(int occurrenceIndex, Integer priceRubles) {
+        priceChanges.removeIf(change -> change.getEffectiveOccurrenceIndex() > occurrenceIndex);
+        LessonSeriesPriceChange current = priceChanges.stream()
+                .filter(change -> change.getEffectiveOccurrenceIndex() == occurrenceIndex)
+                .findFirst()
+                .orElse(null);
+        if (current == null) priceChanges.add(new LessonSeriesPriceChange(this, occurrenceIndex, priceRubles));
+        else current.updatePrice(priceRubles);
+        updatedAt = Instant.now();
     }
 
     public void shiftFrom(Instant oldOccurrenceStart, Instant newOccurrenceStart, int newDurationMinutes) {

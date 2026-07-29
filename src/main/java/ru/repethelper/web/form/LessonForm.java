@@ -13,6 +13,9 @@ public class LessonForm {
     private LocalDateTime startAt;
     @Min(value = 15, message = "Минимальная длительность — 15 минут") @Max(value = 300, message = "Максимальная длительность — 300 минут")
     private int durationMinutes = 60;
+    @Min(value = 1, message = "Минимальная стоимость — 1 ₽")
+    @Max(value = 1_000_000, message = "Максимальная стоимость — 1 000 000 ₽")
+    private Integer priceRubles;
     @NotNull
     private LessonRecurrence recurrence = LessonRecurrence.ONCE;
     @NotNull
@@ -23,6 +26,8 @@ public class LessonForm {
     public void setStartAt(LocalDateTime startAt) { this.startAt = startAt; }
     public int getDurationMinutes() { return durationMinutes; }
     public void setDurationMinutes(int durationMinutes) { this.durationMinutes = durationMinutes; }
+    public Integer getPriceRubles() { return priceRubles; }
+    public void setPriceRubles(Integer priceRubles) { this.priceRubles = priceRubles; }
     public LessonRecurrence getRecurrence() { return recurrence; }
     public void setRecurrence(LessonRecurrence recurrence) { this.recurrence = recurrence; }
     public LessonChangeScope getScope() { return scope; }

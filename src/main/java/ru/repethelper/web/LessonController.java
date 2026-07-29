@@ -37,6 +37,8 @@ public class LessonController {
         LessonForm schedule = new LessonForm();
         schedule.setStudentId(lesson.getStudent().getId()); schedule.setStartAt(LocalDateTime.ofInstant(lesson.getStartAt(), lessons.zone()));
         schedule.setDurationMinutes(lesson.getDurationMinutes());
+        LessonPriceForm priceForm = new LessonPriceForm();
+        priceForm.setPriceRubles(lesson.getPriceRubles());
         model.addAttribute("user", user);
         model.addAttribute("lesson", lesson);
         model.addAttribute("board", board);
@@ -44,6 +46,7 @@ public class LessonController {
         model.addAttribute("materialsForm", materials);
         model.addAttribute("meetingUrlForm", meetingUrl);
         if (user.getRole() == Role.TEACHER) model.addAttribute("privateNoteForm", privateNote);
+        if (user.getRole() == Role.TEACHER) model.addAttribute("priceForm", priceForm);
         model.addAttribute("fromStudentCard", user.getRole() == Role.TEACHER && "student".equals(from));
         model.addAttribute("homeworkHtml", lesson.getHomeworkText() == null ? null : textLinkifier.linkify(lesson.getHomeworkText()));
         model.addAttribute("lessonNotesHtml", lesson.getLessonNotesText() == null ? null : textLinkifier.linkify(lesson.getLessonNotesText()));

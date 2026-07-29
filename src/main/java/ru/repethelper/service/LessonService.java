@@ -17,6 +17,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class LessonService {
@@ -44,18 +47,25 @@ public class LessonService {
 
     @Transactional
     public Lesson create(User teacher, Long studentId, LocalDateTime localStart, int duration, LessonRecurrence recurrence) {
+        return create(teacher, studentId, localStart, duration, recurrence, null);
+    }
+
+    @Transactional
+    public Lesson create(User teacher, Long studentId, LocalDateTime localStart, int duration,
+                         LessonRecurrence recurrence, Integer priceRubles) {
         requireTeacher(teacher);
+        validatePrice(priceRubles);
         User student = users.findById(studentId).orElseThrow(() -> new IllegalArgumentException("Ученик не найден"));
         if (student.getRole() != Role.STUDENT || !connections.existsByStudentAndTeacherAndStatus(student, teacher, ConnectionStatus.ACCEPTED))
             throw new IllegalArgumentException("Сначала примите ученика");
         Instant start = localStart.atZone(zone).toInstant();
         if (recurrence == LessonRecurrence.WEEKLY) {
-            LessonSeries series = seriesRepository.save(new LessonSeries(teacher, student, start, duration));
+            LessonSeries series = seriesRepository.save(new LessonSeries(teacher, student, start, duration, priceRubles));
             Lesson lesson = lessons.save(new Lesson(series, 0));
             notifications.seriesCreated(lesson);
             return lesson;
         }
-        Lesson lesson = lessons.save(new Lesson(teacher, student, start, duration));
+        Lesson lesson = lessons.save(new Lesson(teacher, student, start, duration, priceRubles));
         notifications.lessonCreated(lesson);
         return lesson;
     }
@@ -156,6 +166,63 @@ public class LessonService {
         return lesson;
     }
 
+    @Transactional
+    public PriceUpdateResult updatePrice(User teacher, Long id, Integer priceRubles,
+                                         LessonChangeScope scope, boolean confirmPaidPriceChange) {
+        validatePrice(priceRubles);
+        Lesson lesson = requireTeacherLessonLocked(teacher, id);
+        if (scope == LessonChangeScope.FOLLOWING) {
+            requireRecurring(lesson);
+            LessonSeries series = seriesRepository.findLockedById(lesson.getSeries().getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            series.changePriceFrom(lesson.getOccurrenceIndex(), priceRubles);
+            List<Lesson> following = lessons.findFollowingForUpdate(
+                    series.getId(), lesson.getOccurrenceIndex());
+            int updated = 0;
+            int skippedPaid = 0;
+            for (Lesson item : following) {
+                if (Objects.equals(item.getPriceRubles(), priceRubles)) continue;
+                if (item.getPaymentStatus() == PaymentStatus.PAID) {
+                    skippedPaid++;
+                    continue;
+                }
+                item.updatePrice(priceRubles);
+                updated++;
+            }
+            return new PriceUpdateResult(updated, skippedPaid);
+        }
+        if (!Objects.equals(lesson.getPriceRubles(), priceRubles)
+                && lesson.getPaymentStatus() == PaymentStatus.PAID
+                && !confirmPaidPriceChange) {
+            throw new IllegalArgumentException(
+                    "Стоимость оплаченного занятия изменится, а отметка об оплате будет сброшена. Подтвердите изменение.");
+        }
+        boolean changed = !Objects.equals(lesson.getPriceRubles(), priceRubles);
+        lesson.updatePrice(priceRubles);
+        return new PriceUpdateResult(changed ? 1 : 0, 0);
+    }
+
+    @Transactional
+    public Lesson updatePaymentStatus(User teacher, Long id, PaymentStatus status) {
+        if (status == null || status == PaymentStatus.NO_PRICE)
+            throw new IllegalArgumentException("Выберите корректный статус оплаты");
+        Lesson lesson = requireTeacherLessonLocked(teacher, id);
+        lesson.updatePaymentStatus(status);
+        return lesson;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> latestPrices(User teacher, List<User> students) {
+        requireTeacher(teacher);
+        Map<Long, Integer> result = new LinkedHashMap<>();
+        for (User student : students) {
+            lessons.findFirstByTeacherAndStudentAndPriceRublesIsNotNullOrderByStartAtDescIdDesc(teacher, student)
+                    .map(Lesson::getPriceRubles)
+                    .ifPresent(price -> result.put(student.getId(), price));
+        }
+        return result;
+    }
+
     @Transactional(readOnly = true)
     public Lesson requireAccessible(User user, Long id) {
         Lesson lesson = lessons.findWithStudentById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
@@ -193,6 +260,15 @@ public class LessonService {
                 ? lessons.findByTeacherAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now)
                 : lessons.findByStudentAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now);
         return result.stream().filter(l -> l.getStatus() == LessonStatus.SCHEDULED).toList();
+    }
+
+    private Lesson requireTeacherLessonLocked(User teacher, Long id) {
+        requireTeacher(teacher);
+        Lesson lesson = lessons.findLockedWithStudentById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (!lesson.getTeacher().getId().equals(teacher.getId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lesson;
     }
 
     @Transactional(readOnly = true)
@@ -280,6 +356,10 @@ public class LessonService {
     private void requireRecurring(Lesson lesson) {
         if (!lesson.isRecurring()) throw new IllegalArgumentException("Это занятие не входит в еженедельную серию");
     }
+    private void validatePrice(Integer priceRubles) {
+        if (priceRubles != null && (priceRubles < 1 || priceRubles > 1_000_000))
+            throw new IllegalArgumentException("Стоимость должна быть от 1 до 1 000 000 ₽");
+    }
     private String normalizeMeetingUrl(String value) {
         String trimmed = blankToNull(value);
         if (trimmed == null) return null;
@@ -297,4 +377,5 @@ public class LessonService {
     private void requireTeacher(User user) { if (user.getRole() != Role.TEACHER) throw new ResponseStatusException(HttpStatus.FORBIDDEN); }
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
     public record DeletedLessons(int lessonCount, List<java.util.UUID> boardIds) {}
+    public record PriceUpdateResult(int updatedLessons, int skippedPaidLessons) {}
 }

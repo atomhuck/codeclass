@@ -3,6 +3,8 @@ package ru.repethelper.repository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import ru.repethelper.domain.Lesson;
 import ru.repethelper.domain.User;
 import java.time.Instant;
@@ -12,6 +14,11 @@ import java.util.UUID;
 public interface LessonRepository extends JpaRepository<Lesson, Long> {
     @EntityGraph(attributePaths = {"student", "teacher"})
     Optional<Lesson> findWithStudentById(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"student", "teacher", "series"})
+    @Query("select l from Lesson l where l.id = :id")
+    Optional<Lesson> findLockedWithStudentById(Long id);
 
     @EntityGraph(attributePaths = {"student", "teacher"})
     List<Lesson> findByStartAtBetweenOrderByStartAtAsc(Instant from, Instant to);
@@ -43,6 +50,14 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
     @EntityGraph(attributePaths = {"student", "teacher"})
     List<Lesson> findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(UUID seriesId, int occurrenceIndex);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"student", "teacher", "series"})
+    @Query("select l from Lesson l where l.series.id = :seriesId and l.occurrenceIndex >= :occurrenceIndex order by l.occurrenceIndex")
+    List<Lesson> findFollowingForUpdate(UUID seriesId, int occurrenceIndex);
+
+    @EntityGraph(attributePaths = {"student", "teacher"})
+    Optional<Lesson> findFirstByTeacherAndStudentAndPriceRublesIsNotNullOrderByStartAtDescIdDesc(User teacher, User student);
 
     @Query("select l.occurrenceIndex from Lesson l where l.series.id = :seriesId")
     Set<Integer> findOccurrenceIndexesBySeriesId(UUID seriesId);

@@ -50,6 +50,7 @@ public class TeacherController {
         model.addAttribute("lessonForm", lessonForm);
         model.addAttribute("pending", connections.pendingFor(teacher));
         model.addAttribute("students", students);
+        model.addAttribute("latestPrices", lessons.latestPrices(teacher, students));
         var upcoming = lessons.upcoming(teacher);
         model.addAttribute("upcoming", upcoming);
         model.addAttribute("upcomingPreview", upcoming.stream().limit(4).toList());
@@ -101,7 +102,7 @@ public class TeacherController {
         if (errors.hasErrors()) return error(flash, errors.getAllErrors().getFirst().getDefaultMessage(), "/teacher");
         try {
             Lesson lesson = lessons.create(current(auth), form.getStudentId(), form.getStartAt(),
-                    form.getDurationMinutes(), form.getRecurrence());
+                    form.getDurationMinutes(), form.getRecurrence(), form.getPriceRubles());
             flash.addFlashAttribute("success", form.getRecurrence() == LessonRecurrence.WEEKLY
                     ? "Еженедельные занятия добавлены в расписание"
                     : "Занятие добавлено в расписание");

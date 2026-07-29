@@ -47,4 +47,57 @@ class LessonTest {
         lesson.updateHomeworkSubmissionStatus(HomeworkSubmissionStatus.NOT_SUBMITTED);
         assertThat(lesson.getHomeworkSubmissionStatus()).isEqualTo(HomeworkSubmissionStatus.NOT_SUBMITTED);
     }
+
+    @Test void pricedLessonStartsUnpaidAndCanBeMarkedPaid() {
+        Lesson lesson = new Lesson(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60, 1_500);
+
+        assertThat(lesson.getPriceRubles()).isEqualTo(1_500);
+        assertThat(lesson.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+
+        lesson.updatePaymentStatus(PaymentStatus.PAID);
+        assertThat(lesson.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @Test void changingPriceResetsPaymentAndRemovingItUsesNoPriceState() {
+        Lesson lesson = new Lesson(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60, 1_500);
+        lesson.updatePaymentStatus(PaymentStatus.PAID);
+
+        lesson.updatePrice(1_700);
+        assertThat(lesson.getPriceRubles()).isEqualTo(1_700);
+        assertThat(lesson.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+
+        lesson.updatePrice(null);
+        assertThat(lesson.getPriceRubles()).isNull();
+        assertThat(lesson.getPaymentStatus()).isEqualTo(PaymentStatus.NO_PRICE);
+    }
+
+    @Test void lessonWithoutPriceCannotBeMarkedPaid() {
+        Lesson lesson = new Lesson(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> lesson.updatePaymentStatus(PaymentStatus.PAID))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("стоимость");
+    }
+
+    @Test void recurringLessonsUsePriceEffectiveForTheirOccurrence() {
+        LessonSeries series = new LessonSeries(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60, 1_500);
+        series.changePriceFrom(3, 1_700);
+        series.changePriceFrom(7, null);
+
+        assertThat(new Lesson(series, 2).getPriceRubles()).isEqualTo(1_500);
+        assertThat(new Lesson(series, 3).getPriceRubles()).isEqualTo(1_700);
+        assertThat(new Lesson(series, 6).getPriceRubles()).isEqualTo(1_700);
+        assertThat(new Lesson(series, 7).getPriceRubles()).isNull();
+        assertThat(new Lesson(series, 7).getPaymentStatus()).isEqualTo(PaymentStatus.NO_PRICE);
+    }
+
+    @Test void replacingSeriesPriceDropsRulesThatBelongToLaterFuture() {
+        LessonSeries series = new LessonSeries(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60, 1_500);
+        series.changePriceFrom(3, 1_700);
+        series.changePriceFrom(7, 2_000);
+        series.changePriceFrom(5, 1_800);
+
+        assertThat(series.priceAt(4)).isEqualTo(1_700);
+        assertThat(series.priceAt(5)).isEqualTo(1_800);
+        assertThat(series.priceAt(8)).isEqualTo(1_800);
+    }
 }

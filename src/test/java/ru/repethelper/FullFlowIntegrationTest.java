@@ -669,6 +669,79 @@ class FullFlowIntegrationTest {
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("10000");
     }
 
+    @Test
+    void lessonPricesStayTeacherOnlyAndSeriesChangesPreservePaidOccurrences() throws Exception {
+        User teacher = accounts.requireByUsername("teacher");
+        User student = accounts.registerStudent("Ученик оплаты", "finance_student", "password123");
+        connections.send(student, "teacher_code");
+        ConnectionRequest request = requestRepository.findByStudentOrderByCreatedAtDesc(student).getFirst();
+        connections.process(teacher, request.getId(), true);
+        assertThatThrownBy(() -> lessons.create(teacher, student.getId(),
+                LocalDateTime.of(2027, 1, 5, 17, 0), 60, LessonRecurrence.ONCE, 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("1 до 1 000 000");
+
+        Lesson first = lessons.create(teacher, student.getId(),
+                LocalDateTime.of(2027, 1, 6, 17, 0), 60, LessonRecurrence.WEEKLY, 7_654);
+        long emailsBeforeFinanceChanges = emailNotifications.count();
+        lessons.forMonth(teacher, java.time.YearMonth.of(2027, 1));
+        List<Lesson> occurrences = lessonRepository
+                .findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(first.getSeries().getId(), 0);
+        assertThat(occurrences).hasSizeGreaterThanOrEqualTo(3);
+        Lesson second = occurrences.get(1);
+        Lesson third = occurrences.get(2);
+
+        lessons.updatePaymentStatus(teacher, second.getId(), PaymentStatus.PAID);
+        assertThatThrownBy(() -> lessons.updatePrice(
+                teacher, second.getId(), 7_700, LessonChangeScope.SINGLE, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Подтвердите");
+        assertThat(lessonRepository.findById(second.getId()).orElseThrow())
+                .extracting(Lesson::getPriceRubles, Lesson::getPaymentStatus)
+                .containsExactly(7_654, PaymentStatus.PAID);
+        LessonService.PriceUpdateResult result = lessons.updatePrice(
+                teacher, second.getId(), 8_000, LessonChangeScope.FOLLOWING, false);
+
+        assertThat(result.skippedPaidLessons()).isEqualTo(1);
+        assertThat(lessonRepository.findById(second.getId()).orElseThrow())
+                .extracting(Lesson::getPriceRubles, Lesson::getPaymentStatus)
+                .containsExactly(7_654, PaymentStatus.PAID);
+        assertThat(lessonRepository.findById(third.getId()).orElseThrow())
+                .extracting(Lesson::getPriceRubles, Lesson::getPaymentStatus)
+                .containsExactly(8_000, PaymentStatus.UNPAID);
+
+        lessons.forMonth(teacher, java.time.YearMonth.of(2027, 2));
+        assertThat(lessonRepository.findBySeriesIdAndOccurrenceIndexGreaterThanEqualOrderByOccurrenceIndexAsc(
+                first.getSeries().getId(), 4))
+                .allSatisfy(item -> {
+                    assertThat(item.getPriceRubles()).isEqualTo(8_000);
+                    assertThat(item.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+                });
+        assertThat(emailNotifications.count()).isEqualTo(emailsBeforeFinanceChanges);
+
+        mvc.perform(get("/lessons/{id}", second.getId())
+                        .with(user(teacher.getUsername()).roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("7 654 ₽")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Оплачено")));
+        mvc.perform(get("/lessons/{id}", second.getId())
+                        .with(user(student.getUsername()).roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("7 654 ₽"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Стоимость и оплата"))));
+
+        mvc.perform(post("/teacher/lessons/{id}/payment-status", second.getId())
+                        .with(user(student.getUsername()).roles("STUDENT")).with(csrf())
+                        .param("status", "UNPAID"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/teacher/lessons/{id}/payment-status", second.getId())
+                        .with(user(teacher.getUsername()).roles("TEACHER"))
+                        .param("status", "UNPAID"))
+                .andExpect(status().isForbidden());
+    }
+
     private User verified(User user) {
         user.verifyEmail();
         return users.save(user);

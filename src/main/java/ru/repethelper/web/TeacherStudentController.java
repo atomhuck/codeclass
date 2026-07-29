@@ -9,11 +9,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import ru.repethelper.domain.User;
 import ru.repethelper.domain.HomeworkSubmissionStatus;
+import ru.repethelper.domain.PaymentStatus;
 import ru.repethelper.service.AccountService;
 import ru.repethelper.service.LessonService;
 import ru.repethelper.service.TeacherStudentOverviewService;
 import ru.repethelper.web.form.PrivateLessonNoteForm;
 import ru.repethelper.web.form.StudentDescriptionForm;
+import ru.repethelper.web.form.LessonPriceForm;
 
 @Controller
 @RequestMapping("/teacher")
@@ -97,6 +99,55 @@ public class TeacherStudentController {
         return returnToStudentCard
                 ? "redirect:/teacher/students/" + lesson.getStudent().getId()
                 : "redirect:/lessons/" + lessonId;
+    }
+
+    @PostMapping("/lessons/{lessonId}/price")
+    String updatePrice(Authentication auth, @PathVariable Long lessonId,
+                       @Valid LessonPriceForm form, BindingResult errors,
+                       RedirectAttributes flash) {
+        if (errors.hasErrors()) {
+            flash.addFlashAttribute("error", errors.getAllErrors().getFirst().getDefaultMessage());
+            return "redirect:/lessons/" + lessonId;
+        }
+        try {
+            var result = lessons.updatePrice(current(auth), lessonId, form.getPriceRubles(),
+                    form.getScope(), form.isConfirmPaidPriceChange());
+            String message = form.getPriceRubles() == null ? "Стоимость занятия удалена" : "Стоимость занятия сохранена";
+            if (result.skippedPaidLessons() > 0) {
+                message += ". Оплаченных занятий без изменений: " + result.skippedPaidLessons();
+            }
+            flash.addFlashAttribute("success", message);
+        } catch (IllegalArgumentException ex) {
+            flash.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/lessons/" + lessonId;
+    }
+
+    @PostMapping("/lessons/{lessonId}/payment-status")
+    String updatePaymentStatus(Authentication auth, @PathVariable Long lessonId,
+                               @RequestParam PaymentStatus status,
+                               @RequestParam(defaultValue = "false") boolean returnToStudentCard,
+                               RedirectAttributes flash) {
+        try {
+            var lesson = lessons.updatePaymentStatus(current(auth), lessonId, status);
+            flash.addFlashAttribute("success", status == PaymentStatus.PAID
+                    ? "Занятие отмечено оплаченным"
+                    : "Занятие отмечено неоплаченным");
+            return returnToStudentCard
+                    ? "redirect:/teacher/students/" + lesson.getStudent().getId()
+                    : "redirect:/lessons/" + lessonId;
+        } catch (IllegalArgumentException ex) {
+            flash.addFlashAttribute("error", ex.getMessage());
+            if (returnToStudentCard) {
+                try {
+                    var lesson = lessons.requireTeacherLesson(current(auth), lessonId);
+                    return "redirect:/teacher/students/" + lesson.getStudent().getId();
+                } catch (RuntimeException ignored) {
+                    // Fall back to the lesson route, which will provide the correct 403/404.
+                }
+            }
+            return "redirect:/lessons/" + lessonId;
+        }
     }
 
     private String linkify(String value) {

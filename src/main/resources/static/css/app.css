@@ -273,6 +273,38 @@ input,select,textarea { border-color:var(--line); color:var(--text); background:
 .profile-homework-status { margin-top:17px; padding-top:15px; border-top:1px solid var(--line); }
 .profile-homework-status > p { margin-bottom:9px; color:var(--text); font-size:.78rem; font-weight:700; }
 
+.money-input { position:relative; display:block; }
+.money-input input { padding-right:42px; }
+.money-input > span { position:absolute; right:14px; top:50%; transform:translateY(-50%); color:var(--muted); font-weight:800; pointer-events:none; }
+.finance-card { display:grid; gap:20px; margin-bottom:18px; padding:23px; overflow:hidden; }
+.finance-summary { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+.finance-summary h2 { margin-bottom:9px; }
+.finance-amount { display:block; color:var(--text); font-size:clamp(1.65rem,4vw,2.35rem); letter-spacing:-.04em; }
+.payment-pill { display:inline-flex; align-items:center; min-height:31px; padding:0 11px; border:1px solid var(--line); border-radius:99px; font-size:.72rem; font-weight:800; white-space:nowrap; }
+.payment-pill.no-price { color:var(--muted); background:var(--surface-2); }
+.payment-pill.unpaid { color:#d98b16; border-color:color-mix(in srgb,#d98b16 42%,var(--line)); background:color-mix(in srgb,#d98b16 9%,var(--surface)); }
+.payment-pill.paid { color:color-mix(in srgb,var(--green) 72%,white); border-color:color-mix(in srgb,var(--green) 38%,var(--line)); background:color-mix(in srgb,var(--green) 10%,var(--surface)); }
+.finance-actions { display:grid; gap:7px; }
+.payment-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.payment-button { min-height:41px; padding:0 15px; border:1px solid var(--line); border-radius:10px; color:var(--muted); background:var(--surface-2); font-weight:750; cursor:pointer; transition:transform .16s ease,border-color .16s ease,background .16s ease,color .16s ease; }
+.payment-button:not(:disabled):hover { transform:translateY(-1px); color:var(--text); border-color:var(--cyan); }
+.payment-button.paid.active { color:color-mix(in srgb,var(--green) 75%,white); border-color:color-mix(in srgb,var(--green) 50%,var(--line)); background:color-mix(in srgb,var(--green) 12%,var(--surface)); }
+.payment-button.unpaid.active { color:#d98b16; border-color:color-mix(in srgb,#d98b16 50%,var(--line)); background:color-mix(in srgb,#d98b16 10%,var(--surface)); }
+.payment-button:disabled { opacity:.45; cursor:not-allowed; }
+.finance-editor { border-top:1px solid var(--line); padding-top:17px; }
+.finance-editor > summary { width:max-content; list-style:none; }
+.finance-editor > summary::-webkit-details-marker { display:none; }
+.finance-editor form { max-width:560px; margin-top:14px; padding:18px; border:1px solid var(--line); border-radius:14px; background:var(--surface-2); }
+.finance-editor-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.compact-finance { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin:12px 0; }
+.compact-finance > b { color:var(--text); font-size:1rem; }
+.profile-payment-status { margin-top:17px; padding-top:15px; border-top:1px solid var(--line); }
+.profile-payment-status > p { margin-bottom:9px; color:var(--text); font-size:.78rem; font-weight:700; }
+.profile-payment-status > small { display:block; margin-top:7px; }
+.lesson-indicators .finance-indicator { color:var(--text); font-weight:700; }
+.lesson-indicators .paid-indicator { color:var(--green); }
+.lesson-indicators .unpaid-indicator { color:#d98b16; }
+
 @media (max-width: 768px) {
   .topbar { height:60px; }.nav-links { display:none; }.page { padding-bottom:104px; }
   .mobile-nav { position:fixed; z-index:40; right:10px; bottom:max(9px, env(safe-area-inset-bottom)); left:10px; display:flex; justify-content:space-around; gap:3px; padding:7px; border:1px solid var(--line); border-radius:17px; background:color-mix(in srgb,var(--surface) 92%,transparent); box-shadow:var(--shadow); backdrop-filter:blur(18px); }
@@ -299,9 +331,19 @@ input,select,textarea { border-color:var(--line); color:var(--text); background:
   .student-profile-actions { display:grid; grid-template-columns:1fr; }
   .student-description-card,.student-overview-card,.private-note-card,.student-lessons-section { padding:18px; }
   .homework-status-card { padding:18px; }
+  .finance-card { padding:18px; }
+  .finance-summary { align-items:flex-start; }
+  .finance-editor-footer { align-items:stretch; flex-direction:column; }
+  .payment-actions { display:grid; grid-template-columns:1fr 1fr; }
+  .payment-button { width:100%; }
   .student-description-actions { align-items:stretch; flex-direction:column; }.student-description-actions .button { width:100%; }
   .student-overview-card .panel-heading { gap:9px; flex-direction:column; }
   .student-lesson-row { gap:10px; }.lesson-indicators { grid-column:1/-1; }.student-lesson-row > .arrow { grid-column:3; grid-row:1; }
   .profile-pagination { justify-content:space-between; flex-wrap:wrap; }.profile-pagination span { order:-1; width:100%; text-align:center; }
   .homework-status-card .panel-heading { gap:10px; flex-direction:column; }.homework-status-actions { display:grid; grid-template-columns:1fr 1fr; }.homework-status-button.reset { grid-column:1/-1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-button { transition:none; }
+  .payment-button:not(:disabled):hover { transform:none; }
 }

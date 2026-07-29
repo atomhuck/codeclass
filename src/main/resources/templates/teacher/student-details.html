@@ -47,6 +47,12 @@
                 <span class="status-pill pending" th:unless="${overview.nearestInProgress()}">Запланировано</span>
                 <h3 th:text="${@timeView.dateTime(overview.nearest.startAt)}">1 августа, 17:00</h3>
                 <p th:text="${overview.nearest.durationMinutes + ' минут' + (overview.nearest.recurring ? ' · еженедельно' : '')}">60 минут</p>
+                <div class="compact-finance">
+                    <b th:text="${@timeView.money(overview.nearest.priceRubles)}">1 500 ₽</b>
+                    <span class="payment-pill no-price" th:if="${overview.nearest.paymentStatus.name() == 'NO_PRICE'}">Цена не указана</span>
+                    <span class="payment-pill unpaid" th:if="${overview.nearest.paymentStatus.name() == 'UNPAID'}">Не оплачено</span>
+                    <span class="payment-pill paid" th:if="${overview.nearest.paymentStatus.name() == 'PAID'}">✓ Оплачено</span>
+                </div>
                 <div class="row-actions">
                     <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.nearest.id},from='student')}">Открыть занятие</a>
                     <a th:if="${overview.nearest.meetingUrl != null}" class="button primary" th:href="${overview.nearest.meetingUrl}" target="_blank" rel="noopener noreferrer">К звонку ↗</a>
@@ -75,7 +81,26 @@
                 <span class="status-pill accepted">Проведено</span>
                 <h3 th:text="${@timeView.dateTime(overview.previous.startAt)}">30 июля, 17:00</h3>
                 <p th:text="${overview.previous.durationMinutes + ' минут' + (overview.previous.recurring ? ' · еженедельно' : '')}">60 минут</p>
+                <div class="compact-finance">
+                    <b th:text="${@timeView.money(overview.previous.priceRubles)}">1 500 ₽</b>
+                    <span class="payment-pill no-price" th:if="${overview.previous.paymentStatus.name() == 'NO_PRICE'}">Цена не указана</span>
+                    <span class="payment-pill unpaid" th:if="${overview.previous.paymentStatus.name() == 'UNPAID'}">Не оплачено</span>
+                    <span class="payment-pill paid" th:if="${overview.previous.paymentStatus.name() == 'PAID'}">✓ Оплачено</span>
+                </div>
                 <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.previous.id},from='student')}">Открыть занятие</a>
+                <div class="profile-payment-status">
+                    <p>Оплата предыдущего занятия</p>
+                    <form th:action="@{/teacher/lessons/{id}/payment-status(id=${overview.previous.id})}" method="post" class="payment-actions">
+                        <input type="hidden" name="returnToStudentCard" value="true">
+                        <button class="payment-button paid" type="submit" name="status" value="PAID"
+                                th:disabled="${overview.previous.priceRubles == null}"
+                                th:classappend="${overview.previous.paymentStatus.name() == 'PAID'} ? ' active'">✓ Оплачено</button>
+                        <button class="payment-button unpaid" type="submit" name="status" value="UNPAID"
+                                th:disabled="${overview.previous.priceRubles == null}"
+                                th:classappend="${overview.previous.paymentStatus.name() == 'UNPAID'} ? ' active'">Не оплачено</button>
+                    </form>
+                    <small th:if="${overview.previous.priceRubles == null}">Назначьте стоимость на странице занятия.</small>
+                </div>
                 <div class="profile-homework-status">
                     <p>Ученик сдал домашнюю работу?</p>
                     <form th:action="@{/teacher/lessons/{id}/homework-status(id=${overview.previous.id})}" method="post" class="homework-status-actions">
@@ -123,7 +148,7 @@
             <div class="date-chip"><strong th:text="${@timeView.day(row.lesson.startAt)}">01</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">авг</small></div>
             <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">1 августа, 17:00</b><span th:text="${row.lesson.durationMinutes + ' минут'}">60 минут</span></div>
             <div class="lesson-indicators">
-                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+                <span class="finance-indicator" th:text="${@timeView.money(row.lesson.priceRubles)}">1 500 ₽</span><span th:if="${row.lesson.paymentStatus.name() == 'PAID'}" class="paid-indicator">✓ оплачено</span><span th:if="${row.lesson.paymentStatus.name() == 'UNPAID'}" class="unpaid-indicator">не оплачено</span><span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
             </div>
             <span class="arrow">→</span>
         </a>
@@ -143,7 +168,7 @@
             <div class="date-chip muted-date"><strong th:text="${@timeView.day(row.lesson.startAt)}">30</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">июл</small></div>
             <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">30 июля, 17:00</b><span th:text="${row.lesson.status.name() == 'CANCELLED' ? 'Отменено' : row.lesson.durationMinutes + ' минут · проведено'}">Проведено</span></div>
             <div class="lesson-indicators">
-                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+                <span class="finance-indicator" th:text="${@timeView.money(row.lesson.priceRubles)}">1 500 ₽</span><span th:if="${row.lesson.paymentStatus.name() == 'PAID'}" class="paid-indicator">✓ оплачено</span><span th:if="${row.lesson.paymentStatus.name() == 'UNPAID'}" class="unpaid-indicator">не оплачено</span><span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
             </div>
             <span class="arrow">→</span>
         </a>

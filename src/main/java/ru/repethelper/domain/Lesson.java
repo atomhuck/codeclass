@@ -35,17 +35,28 @@ public class Lesson {
     private String teacherPrivateNote;
     @Column(name = "meeting_url", columnDefinition = "text")
     private String meetingUrl;
+    @Column(name = "price_rubles")
+    private Integer priceRubles;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false, length = 20)
+    private PaymentStatus paymentStatus = PaymentStatus.NO_PRICE;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
     protected Lesson() {}
     public Lesson(User teacher, User student, Instant startAt, int durationMinutes) {
+        this(teacher, student, startAt, durationMinutes, null);
+    }
+    public Lesson(User teacher, User student, Instant startAt, int durationMinutes, Integer priceRubles) {
         this.teacher = teacher; this.student = student; this.startAt = startAt; this.durationMinutes = durationMinutes;
+        this.priceRubles = priceRubles;
+        this.paymentStatus = priceRubles == null ? PaymentStatus.NO_PRICE : PaymentStatus.UNPAID;
         this.status = LessonStatus.SCHEDULED; this.createdAt = Instant.now(); this.updatedAt = createdAt;
     }
     public Lesson(LessonSeries series, int occurrenceIndex) {
-        this(series.getTeacher(), series.getStudent(), series.occurrenceStart(occurrenceIndex), series.getDurationMinutes());
+        this(series.getTeacher(), series.getStudent(), series.occurrenceStart(occurrenceIndex),
+                series.getDurationMinutes(), series.priceAt(occurrenceIndex));
         this.series = series;
         this.occurrenceIndex = occurrenceIndex;
     }
@@ -63,6 +74,8 @@ public class Lesson {
     public String getLessonNotesText() { return lessonNotesText; }
     public String getTeacherPrivateNote() { return teacherPrivateNote; }
     public String getMeetingUrl() { return meetingUrl; }
+    public Integer getPriceRubles() { return priceRubles; }
+    public PaymentStatus getPaymentStatus() { return paymentStatus; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getEndAt() { return startAt.plus(Duration.ofMinutes(durationMinutes)); }
@@ -75,6 +88,20 @@ public class Lesson {
     }
     public void updateTeacherPrivateNote(String teacherPrivateNote) { this.teacherPrivateNote = teacherPrivateNote; touch(); }
     public void updateMeetingUrl(String meetingUrl) { this.meetingUrl = meetingUrl; touch(); }
+    public void updatePrice(Integer priceRubles) {
+        if (Objects.equals(this.priceRubles, priceRubles)) return;
+        this.priceRubles = priceRubles;
+        this.paymentStatus = priceRubles == null ? PaymentStatus.NO_PRICE : PaymentStatus.UNPAID;
+        touch();
+    }
+    public void updatePaymentStatus(PaymentStatus paymentStatus) {
+        Objects.requireNonNull(paymentStatus);
+        if (priceRubles == null || paymentStatus == PaymentStatus.NO_PRICE)
+            throw new IllegalArgumentException("Сначала укажите стоимость занятия");
+        if (this.paymentStatus == paymentStatus) return;
+        this.paymentStatus = paymentStatus;
+        touch();
+    }
     public void cancel() { this.status = LessonStatus.CANCELLED; touch(); }
     private void touch() { this.updatedAt = Instant.now(); }
 }
