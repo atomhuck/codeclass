@@ -30,6 +30,12 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     List<Lesson> findTop8ByStudentAndStartAtGreaterThanEqualOrderByStartAtAsc(User student, Instant from);
 
     @EntityGraph(attributePaths = {"student", "teacher"})
+    List<Lesson> findByTeacherAndStartAtGreaterThanEqualOrderByStartAtAsc(User teacher, Instant from);
+
+    @EntityGraph(attributePaths = {"student", "teacher"})
+    List<Lesson> findByStudentAndStartAtGreaterThanEqualOrderByStartAtAsc(User student, Instant from);
+
+    @EntityGraph(attributePaths = {"student", "teacher"})
     List<Lesson> findByStudentOrderByStartAtDesc(User student);
 
     @EntityGraph(attributePaths = {"student", "teacher"})

@@ -173,10 +173,10 @@ public class LessonService {
     @Transactional
     public List<Lesson> upcoming(User user) {
         Instant now = clock.instant();
-        materializeBetween(user, now, now.plus(180, ChronoUnit.DAYS));
+        materializeBetween(user, now, now.plus(365, ChronoUnit.DAYS));
         List<Lesson> result = user.getRole() == Role.TEACHER
-                ? lessons.findTop8ByTeacherAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now)
-                : lessons.findTop8ByStudentAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now);
+                ? lessons.findByTeacherAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now)
+                : lessons.findByStudentAndStartAtGreaterThanEqualOrderByStartAtAsc(user, now);
         return result.stream().filter(l -> l.getStatus() == LessonStatus.SCHEDULED).toList();
     }
 

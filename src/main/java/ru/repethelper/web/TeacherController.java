@@ -42,9 +42,19 @@ public class TeacherController {
         model.addAttribute("lessonForm", new LessonForm());
         model.addAttribute("pending", connections.pendingFor(teacher));
         model.addAttribute("students", connections.studentsFor(teacher));
-        model.addAttribute("upcoming", lessons.upcoming(teacher));
+        var upcoming = lessons.upcoming(teacher);
+        model.addAttribute("upcoming", upcoming);
+        model.addAttribute("upcomingPreview", upcoming.stream().limit(4).toList());
         model.addAttribute("calendar", calendars.build(selected, lessons.forMonth(teacher, selected)));
         return "teacher/dashboard";
+    }
+
+    @GetMapping("/upcoming")
+    String upcoming(Authentication auth, Model model) {
+        User teacher = current(auth);
+        model.addAttribute("user", teacher);
+        model.addAttribute("upcoming", lessons.upcoming(teacher));
+        return "teacher/upcoming";
     }
 
     @GetMapping("/students")

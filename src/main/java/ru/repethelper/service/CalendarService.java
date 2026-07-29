@@ -21,10 +21,11 @@ public class CalendarService {
         Map<LocalDate, List<Lesson>> byDate = lessons.stream().collect(Collectors.groupingBy(l -> l.getStartAt().atZone(zone).toLocalDate()));
         LocalDate first = month.atDay(1).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate today = LocalDate.now(clock.withZone(zone));
+        Instant now = clock.instant();
         List<CalendarDay> days = new ArrayList<>(42);
         for (int i = 0; i < 42; i++) {
             LocalDate date = first.plusDays(i);
-            days.add(new CalendarDay(date, YearMonth.from(date).equals(month), date.equals(today), byDate.getOrDefault(date, List.of())));
+            days.add(new CalendarDay(date, YearMonth.from(date).equals(month), date.equals(today), byDate.getOrDefault(date, List.of()), now));
         }
         YearMonth prev = month.minusMonths(1), next = month.plusMonths(1);
         String rawTitle = month.format(DateTimeFormatter.ofPattern("LLLL yyyy", RU));

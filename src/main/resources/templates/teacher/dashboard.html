@@ -38,9 +38,9 @@
             </div>
             <div class="calendar weekdays"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
             <div class="calendar days">
-                <div th:each="day : ${calendar.days}" class="calendar-day" th:classappend="${(!day.currentMonth ? ' muted' : (day.today ? ' today' : '')) + (day.hasScheduledLessons ? ' has-lessons' : '')}">
+                <div th:each="day : ${calendar.days}" class="calendar-day" th:classappend="${(!day.currentMonth ? ' muted' : (day.today ? ' today' : '')) + (day.hasUpcomingScheduledLessons ? ' has-lessons' : '') + (day.hasPastLessons ? ' past-lessons' : '')}">
                     <span class="day-number" th:text="${day.date.dayOfMonth}">1</span>
-                    <a th:each="lesson : ${day.lessons}" th:href="@{/lessons/{id}(id=${lesson.id})}" class="calendar-event" th:classappend="${lesson.status.name() == 'CANCELLED'} ? 'cancelled'">
+                    <a th:each="lesson : ${day.lessons}" th:href="@{/lessons/{id}(id=${lesson.id})}" class="calendar-event" th:classappend="${lesson.status.name() == 'CANCELLED' ? 'cancelled' : (day.past(lesson) ? 'past' : '')}">
                         <b th:text="${@timeView.time(lesson.startAt)}">17:00</b><span th:text="${lesson.student.displayName}">Ученик</span>
                     </a>
                 </div>
@@ -49,10 +49,11 @@
         <aside class="panel side-panel" id="upcoming">
             <div class="panel-heading"><div><p class="eyebrow">На очереди</p><h2>Ближайшие</h2></div></div>
             <div th:if="${upcoming.empty}" class="empty compact"><span>⌁</span><p>Пока занятий нет</p></div>
-            <a th:each="lesson : ${upcoming}" th:href="@{/lessons/{id}(id=${lesson.id})}" class="upcoming-item">
+            <a th:each="lesson : ${upcomingPreview}" th:href="@{/lessons/{id}(id=${lesson.id})}" class="upcoming-item">
                 <div class="date-chip"><strong th:text="${@timeView.day(lesson.startAt)}">24</strong><small th:text="${@timeView.monthShort(lesson.startAt)}">июл</small></div>
                 <div><b th:text="${lesson.student.displayName}">Ученик</b><span th:text="${@timeView.time(lesson.startAt) + ' · ' + lesson.durationMinutes + ' мин'}">17:00 · 60 мин</span></div><span class="arrow">→</span>
             </a>
+            <a th:if="${upcoming.size() > 4}" class="button secondary upcoming-more" th:href="@{/teacher/upcoming}">Посмотреть все занятия</a>
         </aside>
     </section>
 

@@ -28,10 +28,20 @@ public class StudentController {
         YearMonth selected = safeMonth(year, month);
         model.addAttribute("user", student);
         model.addAttribute("accepted", connections.isAccepted(student));
-        model.addAttribute("upcoming", lessons.upcoming(student));
+        var upcoming = lessons.upcoming(student);
+        model.addAttribute("upcoming", upcoming);
+        model.addAttribute("upcomingPreview", upcoming.stream().limit(4).toList());
         model.addAttribute("history", lessons.history(student));
         model.addAttribute("calendar", calendars.build(selected, lessons.forMonth(student, selected)));
         return "student/dashboard";
+    }
+
+    @GetMapping("/upcoming")
+    String upcoming(Authentication auth, Model model) {
+        User student = current(auth);
+        model.addAttribute("user", student);
+        model.addAttribute("upcoming", lessons.upcoming(student));
+        return "student/upcoming";
     }
 
     @GetMapping("/teachers")

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Все занятия')}"></head>
+<body>
+<nav th:replace="~{fragments :: nav(${user}, 'dashboard')}"></nav>
+<main class="page container narrow">
+    <header class="page-header">
+        <div><p class="eyebrow">Расписание</p><h1>Все запланированные занятия</h1><p>Полный список ближайших занятий с вашими учениками.</p></div>
+        <a class="button secondary" th:href="@{/teacher}">← К расписанию</a>
+    </header>
+    <section class="panel section-panel">
+        <div th:if="${upcoming.empty}" class="empty compact"><span>⌁</span><p>Пока занятий нет.</p></div>
+        <a th:each="lesson : ${upcoming}" th:href="@{/lessons/{id}(id=${lesson.id})}" class="upcoming-item">
+            <div class="date-chip"><strong th:text="${@timeView.day(lesson.startAt)}">24</strong><small th:text="${@timeView.monthShort(lesson.startAt)}">июл</small></div>
+            <div><b th:text="${lesson.student.displayName}">Ученик</b><span th:text="${@timeView.dateTime(lesson.startAt) + ' · ' + lesson.durationMinutes + ' мин'}"></span></div>
+            <span class="arrow">→</span>
+        </a>
+    </section>
+</main>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'dashboard')}"></nav>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>
