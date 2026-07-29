@@ -57,6 +57,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     if (location.hash === "#new-lesson") document.getElementById("new-lesson")?.setAttribute("open", "");
     const updateStudentNav = () => {
+      if (location.pathname !== "/student") return;
       const nav = document.querySelector(".mobile-nav");
       const history = nav?.querySelector('a[href*="#history"]');
       const lessons = nav?.querySelector('a[href="/student"]');

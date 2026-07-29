@@ -8,23 +8,6 @@
     <div th:if="${success}" class="alert success" th:text="${success}"></div><div th:if="${error}" class="alert error" th:text="${error}"></div>
     <header class="page-header"><div><p class="eyebrow">Кабинет ученика</p><h1 th:text="'Привет, ' + ${user.displayName} + '!'">Привет, ученик!</h1><p th:text="${accepted} ? 'Здесь общее расписание ваших занятий с преподавателями.' : 'Подключитесь к преподавателю, чтобы увидеть занятия.'"></p></div></header>
 
-    <section class="connect-card panel">
-        <div class="connect-visual"><span>RH</span></div>
-        <div><p class="eyebrow">Подключение</p><h2>Добавить преподавателя</h2><p>Введите код преподавателя. После принятия заявки его занятия появятся в общем расписании.</p>
-            <form th:action="@{/student/requests}" th:object="${connectionForm}" method="post" class="connect-form"><input th:field="*{inviteCode}" required placeholder="T-XXXXXXXX" autocomplete="off" data-no-restore-focus><button class="button primary" type="submit">Отправить запрос</button></form>
-        </div>
-    </section>
-
-    <section class="panel section-panel">
-        <div class="panel-heading"><div><p class="eyebrow">Подключения</p><h2>Мои преподаватели</h2></div></div>
-        <div th:if="${requests.empty}" class="empty compact"><span>◎</span><p>Вы пока не отправляли заявок преподавателям.</p></div>
-        <div th:each="request : ${requests}" class="person-row">
-            <span class="avatar cyan" th:text="${#strings.substring(request.teacher.displayName,0,1)}">П</span>
-            <div><b th:text="${request.teacher.displayName}">Преподаватель</b><small th:text="${request.status.name() == 'PENDING'} ? 'Заявка ожидает ответа' : (${request.status.name() == 'REJECTED'} ? 'Заявка отклонена — код можно ввести повторно' : 'Подключение подтверждено')"></small></div>
-            <span class="status-pill" th:classappend="${request.status.name().toLowerCase()}" th:text="${request.status.name() == 'PENDING'} ? 'Ожидает' : (${request.status.name() == 'REJECTED'} ? 'Отклонена' : 'Подключён')"></span>
-        </div>
-    </section>
-
     <section th:if="${accepted}" class="dashboard-grid">
         <div class="panel calendar-panel">
             <div class="panel-heading"><div><p class="eyebrow">Расписание</p><h2 th:text="${calendar.title}">Июль 2026</h2></div><div class="calendar-nav"><a th:href="@{/student(year=${calendar.previousYear},month=${calendar.previousMonth})}">←</a><a th:href="@{/student}">Сегодня</a><a th:href="@{/student(year=${calendar.nextYear},month=${calendar.nextMonth})}">→</a></div></div>

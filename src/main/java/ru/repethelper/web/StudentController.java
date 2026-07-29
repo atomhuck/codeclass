@@ -28,19 +28,27 @@ public class StudentController {
         YearMonth selected = safeMonth(year, month);
         model.addAttribute("user", student);
         model.addAttribute("accepted", connections.isAccepted(student));
-        model.addAttribute("requests", connections.historyFor(student));
-        model.addAttribute("connectionForm", new ConnectionForm());
         model.addAttribute("upcoming", lessons.upcoming(student));
         model.addAttribute("history", lessons.history(student));
         model.addAttribute("calendar", calendars.build(selected, lessons.forMonth(student, selected)));
         return "student/dashboard";
     }
+
+    @GetMapping("/teachers")
+    String teachers(Authentication auth, Model model) {
+        User student = current(auth);
+        model.addAttribute("user", student);
+        model.addAttribute("requests", connections.historyFor(student));
+        model.addAttribute("connectionForm", new ConnectionForm());
+        return "student/teachers";
+    }
+
     @PostMapping("/requests")
     String request(Authentication auth, @Valid ConnectionForm form, BindingResult errors, RedirectAttributes flash) {
         if (errors.hasErrors()) flash.addFlashAttribute("error", errors.getAllErrors().getFirst().getDefaultMessage());
         else try { connections.send(current(auth), form.getInviteCode()); flash.addFlashAttribute("success", "Запрос отправлен преподавателю"); }
         catch (IllegalArgumentException ex) { flash.addFlashAttribute("error", ex.getMessage()); }
-        return "redirect:/student";
+        return "redirect:/student/teachers";
     }
     private User current(Authentication auth) { return accounts.requireByUsername(auth.getName()); }
     private YearMonth safeMonth(Integer year, Integer month) {

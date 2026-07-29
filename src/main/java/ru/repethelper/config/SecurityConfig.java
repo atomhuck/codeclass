@@ -49,6 +49,21 @@ public class SecurityConfig {
                     attempts.loginFailed(request.getParameter("username"), request.getRemoteAddr());
                     response.sendRedirect("/login?error");
                 }).permitAll())
+            .exceptionHandling(errors -> errors.accessDeniedHandler((request, response, denied) -> {
+                var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                boolean signedIn = auth != null && auth.isAuthenticated()
+                        && auth.getPrincipal() instanceof RepetHelperPrincipal;
+                boolean teacher = signedIn && auth.getAuthorities().stream()
+                        .anyMatch(a -> a.getAuthority().equals("ROLE_" + Role.TEACHER));
+                String path = request.getRequestURI();
+                boolean wrongCabinet = (teacher && (path.equals("/student") || path.startsWith("/student/")))
+                        || (!teacher && (path.equals("/teacher") || path.startsWith("/teacher/")));
+                if (signedIn && "GET".equalsIgnoreCase(request.getMethod()) && wrongCabinet) {
+                    response.sendRedirect(teacher ? "/teacher" : "/student");
+                } else {
+                    response.sendError(403);
+                }
+            }))
             .logout(logout -> logout.logoutSuccessUrl("/login?logout").permitAll());
         return http.build();
     }

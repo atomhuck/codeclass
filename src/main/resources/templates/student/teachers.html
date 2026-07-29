@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Преподаватели')}"></head>
+<body>
+<nav th:replace="~{fragments :: nav(${user}, 'teachers')}"></nav>
+<main class="page container narrow">
+    <div th:if="${success}" class="alert success" th:text="${success}"></div>
+    <div th:if="${error}" class="alert error" th:text="${error}"></div>
+
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">Подключения</p>
+            <h1>Мои преподаватели</h1>
+            <p>Добавляйте преподавателей по их коду и следите за состоянием заявок.</p>
+        </div>
+    </header>
+
+    <section class="connect-card panel">
+        <div class="connect-visual"><span>RH</span></div>
+        <div>
+            <p class="eyebrow">Новый преподаватель</p>
+            <h2>Введите код подключения</h2>
+            <p>После принятия заявки занятия преподавателя появятся в общем расписании.</p>
+            <form th:action="@{/student/requests}" th:object="${connectionForm}" method="post" class="connect-form">
+                <input th:field="*{inviteCode}" required placeholder="T-XXXXXXXX" autocomplete="off">
+                <button class="button primary" type="submit">Отправить запрос</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="panel section-panel">
+        <div class="panel-heading"><div><p class="eyebrow">Список</p><h2>Заявки и подключения</h2></div></div>
+        <div th:if="${requests.empty}" class="empty compact"><span>◎</span><p>Вы пока не отправляли заявок преподавателям.</p></div>
+        <div th:each="request : ${requests}" class="person-row">
+            <span class="avatar cyan" th:text="${#strings.substring(request.teacher.displayName,0,1)}">П</span>
+            <div>
+                <b th:text="${request.teacher.displayName}">Преподаватель</b>
+                <small th:text="${request.status.name() == 'PENDING'} ? 'Заявка ожидает ответа' : (${request.status.name() == 'REJECTED'} ? 'Заявка отклонена — код можно ввести повторно' : 'Подключение подтверждено')"></small>
+            </div>
+            <span class="status-pill" th:classappend="${request.status.name().toLowerCase()}" th:text="${request.status.name() == 'PENDING'} ? 'Ожидает' : (${request.status.name() == 'REJECTED'} ? 'Отклонена' : 'Подключён')"></span>
+        </div>
+    </section>
+</main>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'teachers')}"></nav>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>
