@@ -64,8 +64,8 @@
     </form>
 
     <div th:if="${user.role.name() == 'STUDENT'}" class="lesson-sections">
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon green">✓</span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><div class="rich-text" th:classappend="${lesson.homeworkText == null} ? 'empty-text'" th:utext="${lesson.homeworkText != null ? @textLinkifier.linkify(lesson.homeworkText) : 'Преподаватель пока не добавил задание.'}"></div></section>
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan">#</span><div><p class="eyebrow">Разобрали на уроке</p><h2>Материалы занятия</h2></div></div><div class="rich-text" th:classappend="${lesson.lessonNotesText == null} ? 'empty-text'" th:utext="${lesson.lessonNotesText != null ? @textLinkifier.linkify(lesson.lessonNotesText) : 'Заметка появится после занятия.'}"></div></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon green">✓</span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><div class="rich-text" th:classappend="${homeworkHtml == null} ? 'empty-text'" th:utext="${homeworkHtml != null ? homeworkHtml : 'Преподаватель пока не добавил задание.'}"></div></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan">#</span><div><p class="eyebrow">Разобрали на уроке</p><h2>Материалы занятия</h2></div></div><div class="rich-text" th:classappend="${lessonNotesHtml == null} ? 'empty-text'" th:utext="${lessonNotesHtml != null ? lessonNotesHtml : 'Заметка появится после занятия.'}"></div></section>
     </div>
 
     <section class="attachments-grid">

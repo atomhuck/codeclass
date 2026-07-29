@@ -15,9 +15,11 @@ public class LessonController {
     private final LessonService lessons;
     private final AttachmentService attachments;
     private final WhiteboardService whiteboards;
+    private final TextLinkifier textLinkifier;
     public LessonController(AccountService accounts, LessonService lessons, AttachmentService attachments,
-                            WhiteboardService whiteboards) {
+                            WhiteboardService whiteboards, TextLinkifier textLinkifier) {
         this.accounts = accounts; this.lessons = lessons; this.attachments = attachments; this.whiteboards = whiteboards;
+        this.textLinkifier = textLinkifier;
     }
     @GetMapping("/lessons/{id}")
     String details(Authentication auth, @PathVariable Long id, Model model) {
@@ -38,6 +40,8 @@ public class LessonController {
         model.addAttribute("past", lessons.isPast(lesson));
         model.addAttribute("materialsForm", materials);
         model.addAttribute("meetingUrlForm", meetingUrl);
+        model.addAttribute("homeworkHtml", lesson.getHomeworkText() == null ? null : textLinkifier.linkify(lesson.getHomeworkText()));
+        model.addAttribute("lessonNotesHtml", lesson.getLessonNotesText() == null ? null : textLinkifier.linkify(lesson.getLessonNotesText()));
         model.addAttribute("lessonForm", schedule);
         model.addAttribute("homeworkFiles", all.stream().filter(a -> a.getCategory() == AttachmentCategory.HOMEWORK).toList());
         model.addAttribute("notesFiles", all.stream().filter(a -> a.getCategory() == AttachmentCategory.LESSON_NOTES).toList());
