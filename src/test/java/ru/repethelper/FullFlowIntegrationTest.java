@@ -68,6 +68,7 @@ class FullFlowIntegrationTest {
     @Autowired ExternalIdentityRepository externalIdentities;
     @Autowired EmailNotificationRepository emailNotifications;
     @Autowired LessonReminderService lessonReminders;
+    @Autowired TeacherStudentOverviewService teacherStudentOverviews;
     private MockMvc mvc;
 
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
@@ -555,6 +556,91 @@ class FullFlowIntegrationTest {
                         && item.getRecipientEmail().equals(student.getEmail()))
                 .anyMatch(item -> item.getType() == EmailNotificationType.LESSON_CREATED
                         && item.getRecipientEmail().equals(student.getEmail()));
+    }
+
+    @Test
+    void teacherStudentCardKeepsPrivateDataIsolatedAndSelectsCorrectLessons() throws Exception {
+        String suffix = Long.toString(System.nanoTime());
+        User teacherA = verified(accounts.register("Карточка Преподаватель A", "card_teacher_a_" + suffix,
+                "card.teacher.a." + suffix + "@example.test", "TeacherPassword123", Role.TEACHER, true));
+        User teacherB = verified(accounts.register("Карточка Преподаватель B", "card_teacher_b_" + suffix,
+                "card.teacher.b." + suffix + "@example.test", "TeacherPassword123", Role.TEACHER, true));
+        User student = verified(accounts.register("Карточка Ученик", "card_student_" + suffix,
+                "card.student." + suffix + "@example.test", "StudentPassword123", Role.STUDENT, true));
+
+        connections.send(student, profiles.requireFor(teacherA).getInviteCode());
+        connections.send(student, profiles.requireFor(teacherB).getInviteCode());
+        requestRepository.findByStudentOrderByCreatedAtDesc(student)
+                .forEach(request -> connections.process(request.getTeacher(), request.getId(), true));
+
+        ZoneId zone = ZoneId.of("Europe/Moscow");
+        Instant now = Instant.now();
+        Lesson older = lessons.create(teacherA, student.getId(),
+                LocalDateTime.ofInstant(now.minus(Duration.ofDays(2)), zone), 60);
+        lessons.updateMaterials(teacherA, older.getId(), null, "Старый материал не должен подставляться");
+        Lesson previous = lessons.create(teacherA, student.getId(),
+                LocalDateTime.ofInstant(now.minus(Duration.ofHours(2)), zone), 60);
+        lessons.updateMaterials(teacherA, previous.getId(), null, "Материал последнего занятия https://example.test/material");
+        lessons.updateTeacherPrivateNote(teacherA, previous.getId(), "СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ");
+        attachments.store(teacherA, previous.getId(), AttachmentCategory.LESSON_NOTES, List.of(
+                new MockMultipartFile("files", "lesson-material.pdf", "application/pdf", new byte[]{4, 5, 6})));
+        Lesson nearest = lessons.create(teacherA, student.getId(),
+                LocalDateTime.ofInstant(now.plus(Duration.ofHours(2)), zone), 60);
+        lessons.updateMaterials(teacherA, nearest.getId(), "Домашняя работа ближайшего занятия", null);
+        Lesson otherTeacherLesson = lessons.create(teacherB, student.getId(),
+                LocalDateTime.ofInstant(now.plus(Duration.ofHours(3)), zone), 60);
+
+        int queuedBeforePrivateUpdates = emailNotifications.findAll().size();
+        teacherStudentOverviews.updateDescription(teacherA, student.getId(), "Описание только преподавателя A");
+        teacherStudentOverviews.updateDescription(teacherB, student.getId(), "Описание только преподавателя B");
+        lessons.updateTeacherPrivateNote(teacherA, previous.getId(), "СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ");
+        assertThat(emailNotifications.findAll()).hasSize(queuedBeforePrivateUpdates);
+
+        var overviewA = teacherStudentOverviews.get(teacherA, student.getId(), 0, 0);
+        var overviewB = teacherStudentOverviews.get(teacherB, student.getId(), 0, 0);
+        assertThat(overviewA.nearest().getId()).isEqualTo(nearest.getId());
+        assertThat(overviewA.previous().getId()).isEqualTo(previous.getId());
+        assertThat(overviewA.materialFiles()).extracting(Attachment::getOriginalName)
+                .containsExactly("lesson-material.pdf");
+        assertThat(overviewA.relation().getTeacherStudentDescription()).isEqualTo("Описание только преподавателя A");
+        assertThat(overviewB.relation().getTeacherStudentDescription()).isEqualTo("Описание только преподавателя B");
+        assertThat(overviewB.upcoming().content()).extracting(row -> row.lesson().getId())
+                .contains(otherTeacherLesson.getId()).doesNotContain(nearest.getId());
+
+        mvc.perform(get("/teacher/students/{id}", student.getId())
+                        .with(user(teacherA.getUsername()).roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Описание только преподавателя A")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Домашняя работа ближайшего занятия")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Материал последнего занятия")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Старый материал не должен подставляться"))));
+
+        mvc.perform(get("/lessons/{id}", previous.getId())
+                        .with(user(student.getUsername()).roles("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Материал последнего занятия")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ"))));
+
+        mvc.perform(post("/teacher/lessons/{id}/private-note", previous.getId())
+                        .with(user(student.getUsername()).roles("STUDENT")).with(csrf())
+                        .param("note", "Попытка ученика"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/teacher/lessons/{id}/private-note", previous.getId())
+                        .with(user(teacherB.getUsername()).roles("TEACHER")).with(csrf())
+                        .param("note", "Попытка чужого преподавателя"))
+                .andExpect(status().isForbidden());
+        assertThat(lessonRepository.findById(previous.getId()).orElseThrow().getTeacherPrivateNote())
+                .isEqualTo("СЕКРЕТНАЯ ЗАМЕТКА ПРЕПОДАВАТЕЛЯ");
+
+        assertThatThrownBy(() -> teacherStudentOverviews.updateDescription(
+                teacherA, student.getId(), "x".repeat(5_001)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("5000");
+        assertThatThrownBy(() -> lessons.updateTeacherPrivateNote(
+                teacherA, previous.getId(), "x".repeat(10_001)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("10000");
     }
 
     private User verified(User user) {

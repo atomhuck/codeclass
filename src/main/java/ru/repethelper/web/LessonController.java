@@ -22,7 +22,8 @@ public class LessonController {
         this.textLinkifier = textLinkifier;
     }
     @GetMapping("/lessons/{id}")
-    String details(Authentication auth, @PathVariable Long id, Model model) {
+    String details(Authentication auth, @PathVariable Long id,
+                   @RequestParam(required = false) String from, Model model) {
         User user = accounts.requireByUsername(auth.getName());
         Lesson lesson = lessons.requireAccessible(user, id);
         Whiteboard board = whiteboards.getOrCreate(user, lesson);
@@ -31,6 +32,8 @@ public class LessonController {
         materials.setHomeworkText(lesson.getHomeworkText()); materials.setLessonNotesText(lesson.getLessonNotesText());
         MeetingUrlForm meetingUrl = new MeetingUrlForm();
         meetingUrl.setMeetingUrl(lesson.getMeetingUrl());
+        PrivateLessonNoteForm privateNote = new PrivateLessonNoteForm();
+        privateNote.setNote(lesson.getTeacherPrivateNote());
         LessonForm schedule = new LessonForm();
         schedule.setStudentId(lesson.getStudent().getId()); schedule.setStartAt(LocalDateTime.ofInstant(lesson.getStartAt(), lessons.zone()));
         schedule.setDurationMinutes(lesson.getDurationMinutes());
@@ -40,6 +43,8 @@ public class LessonController {
         model.addAttribute("past", lessons.isPast(lesson));
         model.addAttribute("materialsForm", materials);
         model.addAttribute("meetingUrlForm", meetingUrl);
+        if (user.getRole() == Role.TEACHER) model.addAttribute("privateNoteForm", privateNote);
+        model.addAttribute("fromStudentCard", user.getRole() == Role.TEACHER && "student".equals(from));
         model.addAttribute("homeworkHtml", lesson.getHomeworkText() == null ? null : textLinkifier.linkify(lesson.getHomeworkText()));
         model.addAttribute("lessonNotesHtml", lesson.getLessonNotesText() == null ? null : textLinkifier.linkify(lesson.getLessonNotesText()));
         model.addAttribute("lessonForm", schedule);

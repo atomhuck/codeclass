@@ -8,7 +8,7 @@
     <div th:if="${error}" class="alert error" th:text="${error}"></div>
     <header class="page-header">
         <div><p class="eyebrow">Панель преподавателя</p><h1>Добрый день, <span th:text="${user.displayName}">Преподаватель</span></h1><p>Планируйте занятия и держите материалы в порядке.</p></div>
-        <details id="new-lesson" class="popover"><summary class="button primary">+ Назначить занятие</summary>
+        <details id="new-lesson" class="popover" th:attr="open=${selectedStudentId != null ? 'open' : null}"><summary class="button primary">+ Назначить занятие</summary>
             <form th:action="@{/teacher/lessons}" th:object="${lessonForm}" method="post" class="panel popover-panel stack-form">
                 <h3>Новое занятие</h3>
                 <label>Ученик<select th:field="*{studentId}" required><option value="">Выберите ученика</option><option th:each="student : ${students}" th:value="${student.id}" th:text="${student.displayName}"></option></select></label>

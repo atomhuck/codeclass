@@ -22,6 +22,9 @@ public interface ConnectionRequestRepository extends JpaRepository<ConnectionReq
     @EntityGraph(attributePaths = {"student", "teacher"})
     Optional<ConnectionRequest> findWithRelationsById(Long id);
 
+    @EntityGraph(attributePaths = {"student", "teacher"})
+    Optional<ConnectionRequest> findByStudentIdAndTeacherAndStatus(Long studentId, User teacher, ConnectionStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"student", "teacher"})
     Optional<ConnectionRequest> findLockedByStudentAndTeacherAndStatus(User student, User teacher, ConnectionStatus status);

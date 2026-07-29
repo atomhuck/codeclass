@@ -211,16 +211,80 @@ input,select,textarea { border-color:var(--line); color:var(--text); background:
 :root[data-theme="light"] .connect-visual,:root[data-theme="light"] .board-card-visual { background-color:var(--surface-2); }
 :root[data-theme="light"] .rich-text { color:var(--text); }
 
+/* Teacher student profile */
+.student-person-row { justify-content:space-between; }
+.student-person-link { min-width:0; display:flex; align-items:center; gap:13px; border-radius:12px; }
+.student-person-link:hover b { color:var(--cyan); }
+.student-person-copy { min-width:0; display:flex; flex-direction:column; }
+.student-person-copy b,.student-person-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.student-profile-page { width:min(1120px,calc(100% - 40px)); }
+.student-profile-hero { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:18px; padding:24px; }
+.student-profile-identity { min-width:0; display:flex; align-items:center; gap:17px; }
+.student-profile-identity h1 { margin-bottom:7px; font-size:clamp(1.9rem,4vw,2.8rem); }
+.student-profile-identity p:last-child { margin:0; color:var(--muted); font-size:.84rem; }
+.student-profile-avatar { width:58px; height:58px; flex:0 0 58px; font-size:1.3rem; }
+.student-profile-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:9px; }
+.student-description-card,.student-overview-card,.private-note-card { padding:23px; }
+.student-description-card,.private-note-card { margin-bottom:18px; }
+.private-badge { display:inline-flex; align-items:center; min-height:27px; padding:0 9px; border:1px solid color-mix(in srgb,var(--violet) 30%,var(--line)); border-radius:99px; color:var(--violet); background:color-mix(in srgb,var(--violet) 8%,transparent); font:650 .67rem "JetBrains Mono",monospace; white-space:nowrap; }
+.student-description-actions { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-top:12px; }
+.student-description-actions small { color:var(--muted); font-size:.72rem; }
+.student-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-bottom:18px; }
+.student-overview-card { min-width:0; }
+.student-overview-card:last-child { grid-column:1/-1; }
+.lesson-summary h3 { margin:14px 0 5px; font-size:1.2rem; }
+.lesson-summary p { margin-bottom:15px; color:var(--muted); }
+.profile-files { display:grid; gap:7px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+.profile-file { min-width:0; display:flex; align-items:center; gap:10px; padding:8px; border-radius:10px; background:var(--surface-2); }
+.profile-file:hover { outline:1px solid color-mix(in srgb,var(--cyan) 45%,var(--line)); }
+.profile-file > span:last-child { min-width:0; display:flex; flex-direction:column; }
+.profile-file b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.8rem; }
+.profile-file small { margin-top:2px; color:var(--muted); font-size:.68rem; }
+.private-overview-card,.private-note-card { border-color:color-mix(in srgb,var(--violet) 26%,var(--line)); }
+.private-note-view { margin-bottom:16px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.65; }
+.private-note-view.empty-text { color:var(--muted); font-style:italic; }
+.student-lessons-section { margin-bottom:18px; }
+.student-lesson-row { display:grid; grid-template-columns:auto minmax(150px,1fr) minmax(220px,auto) auto; align-items:center; gap:14px; padding:13px 0; border-top:1px solid var(--line); transition:background .16s ease; }
+.student-lesson-row:hover { background:color-mix(in srgb,var(--cyan) 4%,transparent); }
+.student-lesson-main { min-width:0; display:flex; flex-direction:column; gap:4px; }
+.student-lesson-main b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.86rem; }
+.student-lesson-main span { color:var(--muted); font-size:.74rem; }
+.lesson-indicators { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
+.lesson-indicators span { padding:4px 7px; border-radius:99px; color:var(--muted); background:var(--surface-2); font-size:.65rem; white-space:nowrap; }
+.lesson-indicators .private-indicator { color:var(--violet); }
+.student-lesson-row.history-row { opacity:.75; }
+.student-lesson-row.cancelled { opacity:.48; text-decoration:line-through; }
+.muted-date { filter:grayscale(1); }
+.profile-pagination { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:17px; padding-top:16px; border-top:1px solid var(--line); }
+.profile-pagination span { color:var(--muted); font-size:.75rem; }
+
 @media (max-width: 768px) {
   .topbar { height:60px; }.nav-links { display:none; }.page { padding-bottom:104px; }
   .mobile-nav { position:fixed; z-index:40; right:10px; bottom:max(9px, env(safe-area-inset-bottom)); left:10px; display:flex; justify-content:space-around; gap:3px; padding:7px; border:1px solid var(--line); border-radius:17px; background:color-mix(in srgb,var(--surface) 92%,transparent); box-shadow:var(--shadow); backdrop-filter:blur(18px); }
   .mobile-nav a { display:grid; min-width:58px; min-height:47px; place-items:center; align-content:center; gap:2px; border-radius:11px; color:var(--muted); font-size:1.05rem; }.mobile-nav a span { font-size:.57rem; }.mobile-nav a.active { color:var(--green); background:color-mix(in srgb,var(--green) 11%,transparent); }
   .mobile-nav .mobile-add { color:#052016; background:var(--green); box-shadow:0 7px 20px color-mix(in srgb,var(--green) 30%,transparent); }.mobile-nav .mobile-add span { color:#052016; }
   .site-footer { width:min(100% - 24px,1240px); padding-bottom:98px; flex-direction:column; }
+  .student-profile-page { width:min(100% - 24px,1120px); }
+  .student-profile-hero { align-items:flex-start; flex-direction:column; padding:20px; }
+  .student-profile-actions { width:100%; justify-content:flex-start; }
+  .student-overview-grid { grid-template-columns:1fr; }
+  .student-overview-card:last-child { grid-column:auto; }
+  .student-lesson-row { grid-template-columns:auto minmax(0,1fr) auto; }
+  .lesson-indicators { grid-column:2/-1; justify-content:flex-start; }
 }
 @media (max-width: 640px) {
   .topbar { padding:0 12px; }.brand img { width:27px; height:27px; }.brand { font-size:.96rem; }.account-name { display:none; }
   .calendar-panel { overflow:visible; padding:14px; }.calendar { min-width:0; }.calendar.weekdays span { padding:6px 0; font-size:.58rem; }.calendar-day { min-height:42px; padding:3px; border:0; display:grid; place-items:center; cursor:pointer; }.calendar-day.muted { opacity:.22; }.calendar-day.today { box-shadow:none; }.calendar-day.has-lessons:not(.selected) .day-number { color:var(--on-primary); background:var(--green); box-shadow:0 5px 13px color-mix(in srgb,var(--green) 30%,transparent); }.calendar-day.past-lessons:not(.has-lessons):not(.selected) .day-number { display:grid; width:25px; height:25px; place-items:center; border-radius:50%; color:var(--surface); background:var(--muted); box-shadow:none; }.calendar-day.has-lessons .day-number { display:grid; width:25px; height:25px; place-items:center; border-radius:50%; font-weight:750; }.calendar-day.selected { border-radius:10px; background:color-mix(in srgb,var(--cyan) 15%,transparent); outline:1px solid color-mix(in srgb,var(--cyan) 42%,transparent); }.calendar-day.selected.has-lessons .day-number { color:var(--on-primary); background:var(--cyan); }.calendar-day.selected.past-lessons:not(.has-lessons) .day-number { color:var(--surface); background:var(--muted); }.day-number { margin:0; font-size:.7rem; }.calendar-day .calendar-event { display:none; }.calendar.days { gap:3px; border:0; }.mobile-day-agenda { display:block; margin-top:15px; padding-top:15px; border-top:1px solid var(--line); }.mobile-day-agenda h3 { margin-bottom:10px; font-size:1rem; }.mobile-day-list { display:grid; gap:7px; }.mobile-day-list .calendar-event { display:flex; align-items:center; gap:9px; margin:0; padding:11px; border-left-width:3px; font-size:.78rem; }.mobile-day-list .calendar-event b,.mobile-day-list .calendar-event span { display:block; }.mobile-day-list .calendar-event span { margin:0; }.mobile-day-empty { margin:0; color:var(--muted); font-size:.84rem; }.mobile-next-lesson { display:grid; gap:8px; margin-top:16px; padding:14px; border:1px solid color-mix(in srgb,var(--green) 28%,var(--line)); border-radius:12px; background:color-mix(in srgb,var(--green) 7%,var(--surface)); }.mobile-next-lesson .eyebrow { margin:0; }.mobile-next-lesson > p:last-child { margin:0; color:var(--muted); font-size:.84rem; }.mobile-next-lesson .upcoming-item { margin:0; padding:0; border:0; }
   .panel-heading { align-items:flex-start; }.calendar-nav a { padding:7px 8px; }.calendar-nav a:nth-child(2) { font-size:.7rem; }
   .page-header { margin-bottom:20px; }.page-header h1 { font-size:clamp(1.72rem,9vw,2.2rem); }.account-menu-panel { right:-4px; }.site-footer { font-size:.68rem; }
+  .student-person-row { align-items:stretch; flex-direction:column; }
+  .student-person-row .row-actions { display:grid; grid-template-columns:1fr 1fr; width:100%; margin-left:0; }
+  .student-person-row .row-actions .button:first-child { grid-column:1/-1; }
+  .student-profile-identity { align-items:flex-start; }.student-profile-avatar { width:48px; height:48px; flex-basis:48px; }
+  .student-profile-actions { display:grid; grid-template-columns:1fr; }
+  .student-description-card,.student-overview-card,.private-note-card,.student-lessons-section { padding:18px; }
+  .student-description-actions { align-items:stretch; flex-direction:column; }.student-description-actions .button { width:100%; }
+  .student-overview-card .panel-heading { gap:9px; flex-direction:column; }
+  .student-lesson-row { gap:10px; }.lesson-indicators { grid-column:1/-1; }.student-lesson-row > .arrow { grid-column:3; grid-row:1; }
+  .profile-pagination { justify-content:space-between; flex-wrap:wrap; }.profile-pagination span { order:-1; width:100%; text-align:center; }
 }

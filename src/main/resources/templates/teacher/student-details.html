@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Карточка ученика')}"></head>
+<body>
+<nav th:replace="~{fragments :: nav(${user}, 'students')}"></nav>
+<main class="page container student-profile-page">
+    <div th:if="${success}" class="alert success" th:text="${success}"></div>
+    <div th:if="${error}" class="alert error" th:text="${error}"></div>
+
+    <a class="back-link" th:href="@{/teacher/students}">← Все ученики</a>
+    <header class="student-profile-hero panel">
+        <div class="student-profile-identity">
+            <span class="avatar cyan student-profile-avatar" th:text="${#strings.substring(student.displayName,0,1)}">А</span>
+            <div>
+                <p class="eyebrow">Карточка ученика</p>
+                <h1 th:text="${student.displayName}">Ученик</h1>
+                <p><span th:text="${'@' + student.username}">@login</span> · подключён
+                    <span th:text="${@timeView.dateTime(overview.relation.processedAt != null ? overview.relation.processedAt : overview.relation.createdAt)}">1 августа, 12:00</span>
+                </p>
+            </div>
+        </div>
+        <div class="student-profile-actions">
+            <a class="button primary" th:href="@{/teacher(studentId=${student.id})}">+ Назначить занятие</a>
+            <a class="button danger-button" th:href="@{/teacher/students/{id}/remove(id=${student.id})}">Удалить ученика</a>
+        </div>
+    </header>
+
+    <section class="panel student-description-card">
+        <div class="panel-heading">
+            <div><p class="eyebrow">Только для преподавателя</p><h2>Описание ученика</h2></div>
+            <span class="private-badge">Видно только вам</span>
+        </div>
+        <form th:action="@{/teacher/students/{id}/description(id=${student.id})}" th:object="${descriptionForm}" method="post" class="stack-form">
+            <label class="sr-only" for="description">Описание ученика</label>
+            <textarea id="description" th:field="*{description}" rows="5" maxlength="5000"
+                      placeholder="Например: цели, текущий уровень, особенности подготовки и важные договорённости…"></textarea>
+            <div class="student-description-actions"><small>Поле необязательное · до 5000 символов</small><button class="button primary" type="submit">Сохранить описание</button></div>
+        </form>
+    </section>
+
+    <section class="student-overview-grid">
+        <article class="panel student-overview-card">
+            <div class="panel-heading"><div><p class="eyebrow" th:text="${overview.nearestInProgress() ? 'Сейчас' : 'Дальше по расписанию'}">Дальше по расписанию</p><h2>Ближайшее занятие</h2></div></div>
+            <div th:if="${overview.nearest == null}" class="empty compact"><span>⌁</span><p>Ближайших занятий пока нет.</p></div>
+            <div th:if="${overview.nearest != null}" class="lesson-summary">
+                <span class="status-pill accepted" th:if="${overview.nearestInProgress()}">Идёт сейчас</span>
+                <span class="status-pill pending" th:unless="${overview.nearestInProgress()}">Запланировано</span>
+                <h3 th:text="${@timeView.dateTime(overview.nearest.startAt)}">1 августа, 17:00</h3>
+                <p th:text="${overview.nearest.durationMinutes + ' минут' + (overview.nearest.recurring ? ' · еженедельно' : '')}">60 минут</p>
+                <div class="row-actions">
+                    <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.nearest.id},from='student')}">Открыть занятие</a>
+                    <a th:if="${overview.nearest.meetingUrl != null}" class="button primary" th:href="${overview.nearest.meetingUrl}" target="_blank" rel="noopener noreferrer">К звонку ↗</a>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel student-overview-card">
+            <div class="panel-heading"><div><p class="eyebrow">К ближайшей встрече</p><h2>Домашняя работа</h2></div></div>
+            <div th:if="${overview.nearest == null}" class="empty compact"><p>Сначала назначьте следующее занятие.</p></div>
+            <div th:if="${overview.nearest != null}">
+                <div class="rich-text" th:classappend="${homeworkHtml == null} ? 'empty-text'"
+                     th:utext="${homeworkHtml != null ? homeworkHtml : 'Домашняя работа пока не добавлена.'}"></div>
+                <div class="profile-files" th:if="${!overview.homeworkFiles.empty}">
+                    <a th:each="file : ${overview.homeworkFiles}" class="profile-file" th:href="@{/attachments/{id}(id=${file.id})}">
+                        <span class="file-icon">↧</span><span><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></span>
+                    </a>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel student-overview-card">
+            <div class="panel-heading"><div><p class="eyebrow">Последняя завершённая встреча</p><h2>Предыдущее занятие</h2></div></div>
+            <div th:if="${overview.previous == null}" class="empty compact"><span>○</span><p>Проведённых занятий пока нет.</p></div>
+            <div th:if="${overview.previous != null}" class="lesson-summary">
+                <span class="status-pill accepted">Проведено</span>
+                <h3 th:text="${@timeView.dateTime(overview.previous.startAt)}">30 июля, 17:00</h3>
+                <p th:text="${overview.previous.durationMinutes + ' минут' + (overview.previous.recurring ? ' · еженедельно' : '')}">60 минут</p>
+                <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.previous.id},from='student')}">Открыть занятие</a>
+            </div>
+        </article>
+
+        <article class="panel student-overview-card">
+            <div class="panel-heading"><div><p class="eyebrow">Видно ученику</p><h2>Материалы прошлого занятия</h2></div></div>
+            <div th:if="${overview.previous == null}" class="empty compact"><p>Проведённых занятий пока нет.</p></div>
+            <div th:if="${overview.previous != null}">
+                <div class="rich-text" th:classappend="${materialsHtml == null} ? 'empty-text'"
+                     th:utext="${materialsHtml != null ? materialsHtml : 'Материалы к прошлому занятию не добавлены.'}"></div>
+                <div class="profile-files" th:if="${!overview.materialFiles.empty}">
+                    <a th:each="file : ${overview.materialFiles}" class="profile-file" th:href="@{/attachments/{id}(id=${file.id})}">
+                        <span class="file-icon">↧</span><span><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></span>
+                    </a>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel student-overview-card private-overview-card">
+            <div class="panel-heading"><div><p class="eyebrow">Только для преподавателя</p><h2>Личная заметка</h2></div><span class="private-badge">Приватно</span></div>
+            <div th:if="${overview.previous == null}" class="empty compact"><p>Проведённых занятий пока нет.</p></div>
+            <div th:if="${overview.previous != null}">
+                <div class="private-note-view" th:classappend="${overview.previous.teacherPrivateNote == null} ? 'empty-text'"
+                     th:text="${overview.previous.teacherPrivateNote != null ? overview.previous.teacherPrivateNote : 'Личная заметка к прошлому занятию не добавлена.'}"></div>
+                <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.previous.id},from='student')}">Открыть и редактировать</a>
+            </div>
+        </article>
+    </section>
+
+    <section class="panel section-panel student-lessons-section">
+        <div class="panel-heading"><div><p class="eyebrow">Расписание</p><h2>Предстоящие <span class="count" th:text="${overview.upcoming.totalElements}">0</span></h2></div></div>
+        <div th:if="${overview.upcoming.content.empty}" class="empty compact"><span>⌁</span><p>Предстоящих занятий нет.</p></div>
+        <a th:each="row : ${overview.upcoming.content}" class="student-lesson-row" th:href="@{/lessons/{id}(id=${row.lesson.id},from='student')}">
+            <div class="date-chip"><strong th:text="${@timeView.day(row.lesson.startAt)}">01</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">авг</small></div>
+            <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">1 августа, 17:00</b><span th:text="${row.lesson.durationMinutes + ' минут'}">60 минут</span></div>
+            <div class="lesson-indicators">
+                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <nav th:if="${overview.upcoming.totalPages > 1}" class="profile-pagination" aria-label="Предстоящие занятия">
+            <a th:if="${overview.upcoming.hasPrevious()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.previousPage()},historyPage=${overview.history.page})}">← Назад</a>
+            <span th:text="${'Страница ' + (overview.upcoming.page + 1) + ' из ' + overview.upcoming.totalPages}">Страница 1 из 2</span>
+            <a th:if="${overview.upcoming.hasNext()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.nextPage()},historyPage=${overview.history.page})}">Дальше →</a>
+        </nav>
+    </section>
+
+    <section class="panel section-panel student-lessons-section">
+        <div class="panel-heading"><div><p class="eyebrow">Архив</p><h2>История <span class="count" th:text="${overview.history.totalElements}">0</span></h2></div></div>
+        <div th:if="${overview.history.content.empty}" class="empty compact"><span>○</span><p>История занятий пока пуста.</p></div>
+        <a th:each="row : ${overview.history.content}" class="student-lesson-row history-row"
+           th:classappend="${row.lesson.status.name() == 'CANCELLED'} ? ' cancelled'"
+           th:href="@{/lessons/{id}(id=${row.lesson.id},from='student')}">
+            <div class="date-chip muted-date"><strong th:text="${@timeView.day(row.lesson.startAt)}">30</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">июл</small></div>
+            <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">30 июля, 17:00</b><span th:text="${row.lesson.status.name() == 'CANCELLED' ? 'Отменено' : row.lesson.durationMinutes + ' минут · проведено'}">Проведено</span></div>
+            <div class="lesson-indicators">
+                <span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <nav th:if="${overview.history.totalPages > 1}" class="profile-pagination" aria-label="История занятий">
+            <a th:if="${overview.history.hasPrevious()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.page},historyPage=${overview.history.previousPage()})}">← Назад</a>
+            <span th:text="${'Страница ' + (overview.history.page + 1) + ' из ' + overview.history.totalPages}">Страница 1 из 2</span>
+            <a th:if="${overview.history.hasNext()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.page},historyPage=${overview.history.nextPage()})}">Дальше →</a>
+        </nav>
+    </section>
+</main>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'students')}"></nav>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

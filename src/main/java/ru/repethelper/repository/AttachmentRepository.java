@@ -7,6 +7,7 @@ import java.util.*;
 
 public interface AttachmentRepository extends JpaRepository<Attachment, Long> {
     List<Attachment> findByLessonOrderByCreatedAtAsc(Lesson lesson);
+    List<Attachment> findByLessonInOrderByCreatedAtAsc(Collection<Lesson> lessons);
     long countByLessonAndCategory(Lesson lesson, AttachmentCategory category);
     long countByLessonIn(Collection<Lesson> lessons);
     @EntityGraph(attributePaths = {"lesson", "lesson.student"})

@@ -18,6 +18,8 @@ public class ConnectionRequest {
     private Instant createdAt;
     @Column(name = "processed_at")
     private Instant processedAt;
+    @Column(name = "teacher_student_description", columnDefinition = "text")
+    private String teacherStudentDescription;
     protected ConnectionRequest() {}
     public ConnectionRequest(User student, User teacher) {
         this.student = student; this.teacher = teacher; this.status = ConnectionStatus.PENDING; this.createdAt = Instant.now();
@@ -28,6 +30,8 @@ public class ConnectionRequest {
     public ConnectionStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getProcessedAt() { return processedAt; }
+    public String getTeacherStudentDescription() { return teacherStudentDescription; }
     public void accept() { status = ConnectionStatus.ACCEPTED; processedAt = Instant.now(); }
     public void reject() { status = ConnectionStatus.REJECTED; processedAt = Instant.now(); }
+    public void updateTeacherStudentDescription(String description) { this.teacherStudentDescription = description; }
 }

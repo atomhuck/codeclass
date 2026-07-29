@@ -29,19 +29,27 @@ public class TeacherController {
     }
 
     @GetMapping
-    String dashboard(Authentication auth, @RequestParam(required = false) Integer year, @RequestParam(required = false) Integer month, Model model) {
+    String dashboard(Authentication auth, @RequestParam(required = false) Integer year,
+                     @RequestParam(required = false) Integer month,
+                     @RequestParam(required = false) Long studentId, Model model) {
         User teacher = current(auth);
         YearMonth selected = safeMonth(year, month);
         var profile = profiles.requireFor(teacher);
         var profileForm = new TeacherProfileForm();
         profileForm.setDisplayName(teacher.getDisplayName());
+        var students = connections.studentsFor(teacher);
+        var lessonForm = new LessonForm();
+        if (studentId != null && students.stream().anyMatch(student -> student.getId().equals(studentId))) {
+            lessonForm.setStudentId(studentId);
+            model.addAttribute("selectedStudentId", studentId);
+        }
         model.addAttribute("user", teacher);
         model.addAttribute("profile", profile);
         model.addAttribute("profileForm", profileForm);
         model.addAttribute("inviteUrl", baseUrl + "/invite/" + profile.getInviteCode());
-        model.addAttribute("lessonForm", new LessonForm());
+        model.addAttribute("lessonForm", lessonForm);
         model.addAttribute("pending", connections.pendingFor(teacher));
-        model.addAttribute("students", connections.studentsFor(teacher));
+        model.addAttribute("students", students);
         var upcoming = lessons.upcoming(teacher);
         model.addAttribute("upcoming", upcoming);
         model.addAttribute("upcomingPreview", upcoming.stream().limit(4).toList());

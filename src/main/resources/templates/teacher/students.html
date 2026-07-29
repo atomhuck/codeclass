@@ -18,8 +18,12 @@
     <section class="panel section-panel">
         <div class="panel-heading"><div><p class="eyebrow">Активные</p><h2>Мои ученики <span class="count" th:text="${students.size()}">0</span></h2></div></div>
         <div th:if="${students.empty}" class="empty"><span>◎</span><h3>Пока никого нет</h3><p>Передайте ученику свой код подключения.</p></div>
-        <div th:each="student : ${students}" class="person-row">
-            <span class="avatar cyan" th:text="${#strings.substring(student.displayName,0,1)}">А</span><div><b th:text="${student.displayName}">Ученик</b><small th:text="${'@' + student.username}">@login</small></div><div class="row-actions"><a class="button secondary" th:href="@{/teacher}">Назначить занятие</a><a class="button danger-button" th:href="@{/teacher/students/{id}/remove(id=${student.id})}">Удалить</a></div>
+        <div th:each="student : ${students}" class="person-row student-person-row">
+            <a class="student-person-link" th:href="@{/teacher/students/{id}(id=${student.id})}">
+                <span class="avatar cyan" th:text="${#strings.substring(student.displayName,0,1)}">А</span>
+                <span class="student-person-copy"><b th:text="${student.displayName}">Ученик</b><small th:text="${'@' + student.username}">@login</small></span>
+            </a>
+            <div class="row-actions"><a class="button primary" th:href="@{/teacher/students/{id}(id=${student.id})}">Открыть карточку</a><a class="button secondary" th:href="@{/teacher(studentId=${student.id})}">Назначить занятие</a><a class="button danger-button" th:href="@{/teacher/students/{id}/remove(id=${student.id})}">Удалить</a></div>
         </div>
     </section>
 </main>

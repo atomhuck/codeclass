@@ -141,6 +141,14 @@ public class LessonService {
         requireTeacherLesson(teacher, id).updateMeetingUrl(normalizeMeetingUrl(meetingUrl));
     }
 
+    @Transactional
+    public void updateTeacherPrivateNote(User teacher, Long id, String note) {
+        String normalized = blankToNull(note);
+        if (normalized != null && normalized.length() > 10_000)
+            throw new IllegalArgumentException("Личная заметка не должна превышать 10000 символов");
+        requireTeacherLesson(teacher, id).updateTeacherPrivateNote(normalized);
+    }
+
     @Transactional(readOnly = true)
     public Lesson requireAccessible(User user, Long id) {
         Lesson lesson = lessons.findWithStudentById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
@@ -197,6 +205,12 @@ public class LessonService {
     @Transactional
     public void materializeAllBetween(Instant from, Instant until) {
         materializeSeries(seriesRepository.findAll(), from, until);
+    }
+
+    @Transactional
+    public void materializeForTeacherStudent(User teacher, User student, Instant from, Instant until) {
+        requireTeacher(teacher);
+        materializeSeries(seriesRepository.findByTeacherAndStudent(teacher, student), from, until);
     }
 
     private void materializeSeries(List<LessonSeries> relevantSeries, Instant from, Instant until) {

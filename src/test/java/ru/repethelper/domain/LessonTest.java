@@ -28,4 +28,14 @@ class LessonTest {
         lesson.updateMeetingUrl(null);
         assertThat(lesson.getMeetingUrl()).isNull();
     }
+
+    @Test void privateTeacherNoteIsIndependentFromSharedMaterials() {
+        Lesson lesson = new Lesson(teacher, student, Instant.parse("2026-07-23T10:00:00Z"), 60);
+        lesson.updateMaterials("Домашняя работа", "Материалы для ученика");
+        lesson.updateTeacherPrivateNote("Личная запись преподавателя");
+
+        assertThat(lesson.getHomeworkText()).isEqualTo("Домашняя работа");
+        assertThat(lesson.getLessonNotesText()).isEqualTo("Материалы для ученика");
+        assertThat(lesson.getTeacherPrivateNote()).isEqualTo("Личная запись преподавателя");
+    }
 }
