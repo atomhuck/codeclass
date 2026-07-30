@@ -17,7 +17,7 @@
                        minlength="6" maxlength="6" autocomplete="one-time-code"
                        placeholder="000000" required autofocus>
             </label>
-            <button class="button primary full">Подтвердить email <span>→</span></button>
+            <button class="button primary full">Подтвердить email<svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
         </form>
         <form th:action="@{/verify-email/resend}" method="post"><button class="button secondary full">Получить новый код</button></form>
         <form th:action="@{/logout}" method="post"><button class="button ghost full">Выйти</button></form>

@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <meta name="theme-color" content="#08111A">
+    <meta name="theme-color" content="#F6F7FB">
     <meta name="yandex-verification" content="732d53705767dd1b">
     <meta name="_csrf" th:content="${_csrf.token}">
     <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <title th:text="'Доска занятия — RepetHelper'">Доска занятия — RepetHelper</title>
     <link rel="icon" type="image/svg+xml" th:href="@{/brand/repethelper-mark.svg}">
-    <script th:src="@{/js/theme.js}"></script>
-    <link rel="stylesheet" th:href="@{/css/whiteboard.css}">
+    <script th:src="@{/js/theme.js(v=2)}"></script>
+    <link rel="stylesheet" th:href="@{/css/whiteboard.css(v=2)}">
 </head>
 <body>
 <main id="whiteboard-app"
@@ -34,7 +34,8 @@
             <span id="participant-count" class="participant-count">1</span>
         </div>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить тему" title="Переключить тему">
-            <span class="theme-toggle-sun" aria-hidden="true">☀</span><span class="theme-toggle-moon" aria-hidden="true">☾</span>
+            <svg class="theme-toggle-sun ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#sun}"></use></svg>
+            <svg class="theme-toggle-moon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#moon}"></use></svg>
         </button>
         <button id="copy-link" class="topbar-button" type="button" title="Скопировать ссылку">Скопировать ссылку</button>
         <a class="topbar-button back-button" th:href="@{/lessons/{id}(id=${lesson.id})}">К занятию</a>
@@ -43,16 +44,16 @@
     <aside class="board-toolbar" aria-label="Инструменты доски">
         <div class="tool-group">
             <button class="tool-button active" type="button" data-tool="pencil" title="Карандаш (P)">
-                <span class="tool-icon">✎</span><span class="tool-label">Карандаш</span>
+                <svg class="tool-icon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#pencil}"></use></svg><span class="tool-label">Карандаш</span>
             </button>
             <button class="tool-button" type="button" data-tool="eraser" title="Объектный ластик (E)">
-                <span class="tool-icon">⌫</span><span class="tool-label">Ластик</span>
+                <svg class="tool-icon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#eraser}"></use></svg><span class="tool-label">Ластик</span>
             </button>
             <button class="tool-button" type="button" data-tool="select" title="Выбор фотографии (V)">
-                <span class="tool-icon">↖</span><span class="tool-label">Выбор</span>
+                <svg class="tool-icon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#pointer}"></use></svg><span class="tool-label">Выбор</span>
             </button>
             <button class="tool-button" type="button" data-tool="hand" title="Перемещение (H)">
-                <span class="tool-icon">✋</span><span class="tool-label">Рука</span>
+                <svg class="tool-icon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#hand}"></use></svg><span class="tool-label">Рука</span>
             </button>
         </div>
 
@@ -76,12 +77,12 @@
 
         <div class="tool-divider"></div>
         <label class="tool-button upload-button" title="Загрузить JPEG/PNG или вставить изображение через Ctrl+V">
-            <span class="tool-icon">▧</span><span class="tool-label">Фото</span>
+            <svg class="tool-icon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#image}"></use></svg><span class="tool-label">Фото</span>
             <input id="image-upload" type="file" accept="image/jpeg,image/png">
         </label>
         <button id="clear-board" th:if="${user.role.name() == 'TEACHER'}"
                 class="tool-button danger" type="button" title="Полностью очистить доску">
-            <span class="tool-icon">×</span><span class="tool-label">Очистить</span>
+            <svg class="tool-icon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#trash}"></use></svg><span class="tool-label">Очистить</span>
         </button>
     </aside>
 
@@ -95,14 +96,14 @@
     </section>
 
     <div class="zoom-controls" aria-label="Масштаб">
-        <button id="zoom-out" type="button" title="Уменьшить">−</button>
+        <button id="zoom-out" type="button" title="Уменьшить"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#minus}"></use></svg></button>
         <button id="zoom-reset" type="button" title="Масштаб 100%"><span id="zoom-value">100%</span></button>
-        <button id="zoom-in" type="button" title="Увеличить">+</button>
+        <button id="zoom-in" type="button" title="Увеличить"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#plus}"></use></svg></button>
     </div>
 
     <div class="board-hint">Колесо — прокрутка · Ctrl + колесо — масштаб · Space + перетаскивание — перемещение · Ctrl+V — вставить фото</div>
 </main>
-<script th:src="@{/vendor/fabric-7.4.0.min.js}"></script>
-<script th:src="@{/js/whiteboard.js}"></script>
+<script th:src="@{/vendor/fabric-7.4.0.min.js(v=2)}"></script>
+<script th:src="@{/js/whiteboard.js(v=2)}"></script>
 </body>
 </html>

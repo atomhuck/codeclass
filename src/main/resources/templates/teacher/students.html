@@ -2,13 +2,13 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head('Ученики')}"></head>
 <body>
-<nav th:replace="~{fragments :: nav(${user}, 'students')}"></nav>
+<nav th:replace="~{fragments :: topNav(${user}, 'students')}"></nav>
 <main class="page container narrow">
     <div th:if="${success}" class="alert success" th:text="${success}"></div><div th:if="${error}" class="alert error" th:text="${error}"></div>
     <header class="page-header"><div><p class="eyebrow">Ваш класс</p><h1>Ученики</h1><p>Управляйте запросами и открывайте расписание каждого ученика.</p></div></header>
     <section class="panel section-panel">
         <div class="panel-heading"><div><p class="eyebrow">Требуют внимания</p><h2>Новые запросы <span class="count" th:text="${pending.size()}">0</span></h2></div></div>
-        <div th:if="${pending.empty}" class="empty compact"><span>✓</span><p>Новых запросов нет</p></div>
+        <div th:if="${pending.empty}" class="empty compact"><p>Новых запросов нет</p></div>
         <div th:each="request : ${pending}" class="person-row">
             <span class="avatar" th:text="${#strings.substring(request.student.displayName,0,1)}">А</span>
             <div><b th:text="${request.student.displayName}">Ученик</b><small th:text="${'@' + request.student.username}">@login</small></div>
@@ -23,7 +23,27 @@
                 <span class="avatar cyan" th:text="${#strings.substring(student.displayName,0,1)}">А</span>
                 <span class="student-person-copy"><b th:text="${student.displayName}">Ученик</b><small th:text="${'@' + student.username}">@login</small></span>
             </a>
-            <div class="row-actions"><a class="button primary" th:href="@{/teacher/students/{id}(id=${student.id})}">Открыть карточку</a><a class="button secondary" th:href="@{/teacher(studentId=${student.id})}">Назначить занятие</a><a class="button danger-button" th:href="@{/teacher/students/{id}/remove(id=${student.id})}">Удалить</a></div>
+            <div class="row-actions student-row-actions">
+                <a class="button primary compact" th:href="@{/teacher/students/{id}(id=${student.id})}">
+                    Открыть
+                    <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg>
+                </a>
+                <details class="action-menu" data-menu>
+                    <summary class="icon-button" aria-label="Действия с учеником" title="Действия с учеником">
+                        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#more}"></use></svg>
+                    </summary>
+                    <div class="action-menu-panel">
+                        <a th:href="@{/teacher(studentId=${student.id})}">
+                            <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#calendar}"></use></svg>
+                            <span>Назначить занятие</span>
+                        </a>
+                        <a class="danger" th:href="@{/teacher/students/{id}/remove(id=${student.id})}">
+                            <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#trash}"></use></svg>
+                            <span>Удалить ученика</span>
+                        </a>
+                    </div>
+                </details>
+            </div>
         </div>
     </section>
 </main>

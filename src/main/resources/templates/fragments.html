@@ -3,44 +3,76 @@
 <head th:fragment="head(title)">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#08111A">
+    <meta name="theme-color" content="#F6F7FB">
     <meta name="application-name" content="RepetHelper">
     <meta name="yandex-verification" content="732d53705767dd1b">
     <link rel="icon" type="image/svg+xml" th:href="@{/brand/repethelper-mark.svg}">
     <title th:text="${title} + ' — RepetHelper'">RepetHelper</title>
-    <script th:src="@{/js/theme.js}"></script>
-    <link rel="stylesheet" th:href="@{/css/app.css}">
-    <script defer th:src="@{/js/cookie-notice.js}"></script>
-    <script defer th:src="@{/js/mobile-calendar.js}"></script>
+    <script th:src="@{/js/theme.js(v=2)}"></script>
+    <link rel="stylesheet" th:href="@{/css/app.css(v=2)}">
+    <script defer th:src="@{/js/ui.js(v=2)}"></script>
+    <script defer th:src="@{/js/cookie-notice.js(v=2)}"></script>
+    <script defer th:src="@{/js/mobile-calendar.js(v=2)}"></script>
 </head>
 <body>
-<nav th:fragment="nav(user, area)" class="topbar">
-    <a class="brand" th:href="${user.role.name() == 'TEACHER'} ? @{/teacher} : @{/student}" aria-label="RepetHelper: на главную">
+
+<svg th:fragment="icon(name)" class="ui-icon" aria-hidden="true">
+    <use th:href="@{/brand/ui-icons.svg} + '#' + ${name}"></use>
+</svg>
+
+<nav th:fragment="topNav(user, area)" class="topbar">
+    <a class="brand" th:href="${user.role.name() == 'TEACHER'} ? @{/teacher} : @{/student}"
+       aria-label="RepetHelper: на главную">
         <img th:src="@{/brand/repethelper-mark.svg}" alt=""><span>RepetHelper</span>
     </a>
     <div class="nav-links">
-        <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher}" th:classappend="${area == 'dashboard'} ? 'active'">Календарь</a>
-        <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/students}" th:classappend="${area == 'students'} ? 'active'">Ученики</a>
-        <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}" th:classappend="${area == 'dashboard'} ? 'active'">Мои занятия</a>
-        <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student/teachers}" th:classappend="${area == 'teachers'} ? 'active'">Преподаватели</a>
+        <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher}"
+           th:classappend="${area == 'dashboard'} ? 'active'"
+           th:attr="aria-current=${area == 'dashboard' ? 'page' : null}">Календарь</a>
+        <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/students}"
+           th:classappend="${area == 'students'} ? 'active'"
+           th:attr="aria-current=${area == 'students' ? 'page' : null}">Ученики</a>
+        <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}"
+           th:classappend="${area == 'dashboard'} ? 'active'"
+           th:attr="aria-current=${area == 'dashboard' ? 'page' : null}">Мои занятия</a>
+        <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student/teachers}"
+           th:classappend="${area == 'teachers'} ? 'active'"
+           th:attr="aria-current=${area == 'teachers' ? 'page' : null}">Преподаватели</a>
     </div>
     <div class="topbar-actions">
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить тему" title="Переключить тему">
-            <span class="theme-toggle-sun" aria-hidden="true">☀</span><span class="theme-toggle-moon" aria-hidden="true">☾</span>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить тему"
+                title="Переключить тему">
+            <svg class="theme-toggle-sun ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#sun}"></use></svg>
+            <svg class="theme-toggle-moon ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#moon}"></use></svg>
         </button>
-    <div class="account">
-        <details class="account-menu">
-            <summary class="account-summary"><span class="account-name" th:text="${user.displayName}">Имя</span><span aria-hidden="true">⌄</span></summary>
-            <div class="account-menu-panel">
-                <a th:href="@{/account/security}" class="account-link">Аккаунт и безопасность</a>
-                <button class="account-logout" type="button" data-logout-confirm>Выйти</button>
-            </div>
-        </details>
-    </div>
+        <div class="account">
+            <details class="account-menu" data-menu>
+                <summary class="account-summary">
+                    <span class="account-avatar" aria-hidden="true"
+                          th:text="${#strings.substring(user.displayName,0,1)}">А</span>
+                    <span class="account-name" th:text="${user.displayName}">Имя</span>
+                    <svg class="ui-icon account-chevron" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#chevron-down}"></use></svg>
+                </summary>
+                <div class="account-menu-panel">
+                    <a th:href="@{/account/security}" class="account-link">
+                        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#shield}"></use></svg>
+                        <span>Аккаунт и безопасность</span>
+                    </a>
+                    <button class="account-logout" type="button" data-logout-confirm>
+                        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#logout}"></use></svg>
+                        <span>Выйти</span>
+                    </button>
+                </div>
+            </details>
+        </div>
     </div>
     <dialog class="logout-dialog" data-logout-dialog aria-labelledby="logout-title">
         <div class="logout-dialog-card">
-            <p class="eyebrow">Выход из аккаунта</p><h2 id="logout-title">Выйти из RepetHelper?</h2>
+            <span class="dialog-icon danger" aria-hidden="true">
+                <svg class="ui-icon"><use th:href="@{/brand/ui-icons.svg#logout}"></use></svg>
+            </span>
+            <p class="eyebrow">Выход из аккаунта</p>
+            <h2 id="logout-title">Выйти из RepetHelper?</h2>
             <p>Вы сможете войти снова в любой момент.</p>
             <div class="logout-dialog-actions">
                 <form method="dialog"><button class="button secondary" value="cancel">Остаться</button></form>
@@ -51,17 +83,47 @@
 </nav>
 
 <nav th:fragment="mobileNav(user, area)" class="mobile-nav" aria-label="Основная навигация">
-    <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher}" th:classappend="${area == 'dashboard'} ? 'active'">▦<span>Расписание</span></a>
-    <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/students}" th:classappend="${area == 'students'} ? 'active'">◉<span>Ученики</span></a>
-    <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher} + '#new-lesson'" class="mobile-add">＋<span>Добавить</span></a>
-    <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}" th:classappend="${area == 'dashboard'} ? 'active'">▦<span>Занятия</span></a>
-    <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student/teachers}" th:classappend="${area == 'teachers'} ? 'active'">◉<span>Преподы</span></a>
-    <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student} + '#history'" th:classappend="${area == 'history'} ? 'active'">◷<span>История</span></a>
-    <a th:href="@{/account/security}" th:classappend="${area == 'account'} ? 'active'">◎<span>Аккаунт</span></a>
+    <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher}"
+       th:classappend="${area == 'dashboard'} ? 'active'"
+       th:attr="aria-current=${area == 'dashboard' ? 'page' : null}">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#calendar}"></use></svg><span>Расписание</span>
+    </a>
+    <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/students}"
+       th:classappend="${area == 'students'} ? 'active'"
+       th:attr="aria-current=${area == 'students' ? 'page' : null}">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#users}"></use></svg><span>Ученики</span>
+    </a>
+    <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher} + '#new-lesson'" class="mobile-add">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#plus}"></use></svg><span>Добавить</span>
+    </a>
+    <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}"
+       th:classappend="${area == 'dashboard'} ? 'active'"
+       th:attr="aria-current=${area == 'dashboard' ? 'page' : null}">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#calendar}"></use></svg><span>Занятия</span>
+    </a>
+    <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student/teachers}"
+       th:classappend="${area == 'teachers'} ? 'active'"
+       th:attr="aria-current=${area == 'teachers' ? 'page' : null}">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#users}"></use></svg><span>Преподаватели</span>
+    </a>
+    <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student} + '#history'"
+       th:classappend="${area == 'history'} ? 'active'"
+       th:attr="aria-current=${area == 'history' ? 'page' : null}">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#history}"></use></svg><span>История</span>
+    </a>
+    <a th:href="@{/account/security}" th:classappend="${area == 'account'} ? 'active'"
+       th:attr="aria-current=${area == 'account' ? 'page' : null}">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#account}"></use></svg><span>Аккаунт</span>
+    </a>
 </nav>
 
 <footer th:fragment="footer" class="site-footer">
-    <span>© RepetHelper</span><span class="footer-links"><a th:href="@{/legal/terms}">Условия</a><a th:href="@{/legal/privacy}">Конфиденциальность</a><a th:href="@{/legal/personal-data}">Персональные данные</a></span>
+    <span>© RepetHelper</span>
+    <span class="footer-links">
+        <a th:href="@{/legal/terms}">Условия</a>
+        <a th:href="@{/legal/privacy}">Конфиденциальность</a>
+        <a th:href="@{/legal/personal-data}">Персональные данные</a>
+    </span>
 </footer>
 </body>
 </html>

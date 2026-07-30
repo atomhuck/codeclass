@@ -2,7 +2,7 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head('Безопасность')}"></head>
 <body>
-<nav th:replace="~{fragments :: nav(${user}, 'security')}"></nav>
+<nav th:replace="~{fragments :: topNav(${user}, 'security')}"></nav>
 <main class="container narrow page">
     <header class="page-header"><div><p class="eyebrow">Аккаунт</p><h1>Безопасность</h1><p>Способы входа в RepetHelper.</p></div></header>
     <div th:if="${success}" class="alert success" th:text="${success}"></div>

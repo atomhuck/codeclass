@@ -2,12 +2,12 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head('Карточка ученика')}"></head>
 <body>
-<nav th:replace="~{fragments :: nav(${user}, 'students')}"></nav>
+<nav th:replace="~{fragments :: topNav(${user}, 'students')}"></nav>
 <main class="page container student-profile-page">
     <div th:if="${success}" class="alert success" th:text="${success}"></div>
     <div th:if="${error}" class="alert error" th:text="${error}"></div>
 
-    <a class="back-link" th:href="@{/teacher/students}">← Все ученики</a>
+    <a class="back-link" th:href="@{/teacher/students}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Все ученики</a>
     <header class="student-profile-hero panel">
         <div class="student-profile-identity">
             <span class="avatar cyan student-profile-avatar" th:text="${#strings.substring(student.displayName,0,1)}">А</span>
@@ -20,8 +20,21 @@
             </div>
         </div>
         <div class="student-profile-actions">
-            <a class="button primary" th:href="@{/teacher(studentId=${student.id})}">+ Назначить занятие</a>
-            <a class="button danger-button" th:href="@{/teacher/students/{id}/remove(id=${student.id})}">Удалить ученика</a>
+            <a class="button primary" th:href="@{/teacher(studentId=${student.id})}">
+                <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#plus}"></use></svg>
+                Назначить занятие
+            </a>
+            <details class="action-menu" data-menu>
+                <summary class="icon-button" aria-label="Другие действия" title="Другие действия">
+                    <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#more}"></use></svg>
+                </summary>
+                <div class="action-menu-panel">
+                    <a class="danger" th:href="@{/teacher/students/{id}/remove(id=${student.id})}">
+                        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#trash}"></use></svg>
+                        <span>Удалить ученика</span>
+                    </a>
+                </div>
+            </details>
         </div>
     </header>
 
@@ -41,7 +54,7 @@
     <section class="student-overview-grid">
         <article class="panel student-overview-card">
             <div class="panel-heading"><div><p class="eyebrow" th:text="${overview.nearestInProgress() ? 'Сейчас' : 'Дальше по расписанию'}">Дальше по расписанию</p><h2>Ближайшее занятие</h2></div></div>
-            <div th:if="${overview.nearest == null}" class="empty compact"><span>⌁</span><p>Ближайших занятий пока нет.</p></div>
+            <div th:if="${overview.nearest == null}" class="empty compact"><p>Ближайших занятий пока нет.</p></div>
             <div th:if="${overview.nearest != null}" class="lesson-summary">
                 <span class="status-pill accepted" th:if="${overview.nearestInProgress()}">Идёт сейчас</span>
                 <span class="status-pill pending" th:unless="${overview.nearestInProgress()}">Запланировано</span>
@@ -51,7 +64,7 @@
                     <b th:text="${@timeView.money(overview.nearest.priceRubles)}">1 500 ₽</b>
                     <span class="payment-pill no-price" th:if="${overview.nearest.paymentStatus.name() == 'NO_PRICE'}">Цена не указана</span>
                     <span class="payment-pill unpaid" th:if="${overview.nearest.paymentStatus.name() == 'UNPAID'}">Не оплачено</span>
-                    <span class="payment-pill paid" th:if="${overview.nearest.paymentStatus.name() == 'PAID'}">✓ Оплачено</span>
+                    <span class="payment-pill paid" th:if="${overview.nearest.paymentStatus.name() == 'PAID'}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>Оплачено</span>
                 </div>
                 <div class="row-actions">
                     <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.nearest.id},from='student')}">Открыть занятие</a>
@@ -68,7 +81,7 @@
                      th:utext="${homeworkHtml != null ? homeworkHtml : 'Домашняя работа пока не добавлена.'}"></div>
                 <div class="profile-files" th:if="${!overview.homeworkFiles.empty}">
                     <a th:each="file : ${overview.homeworkFiles}" class="profile-file" th:href="@{/attachments/{id}(id=${file.id})}">
-                        <span class="file-icon">↧</span><span><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></span>
+                        <span class="file-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#file}"></use></svg></span><span><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></span>
                     </a>
                 </div>
             </div>
@@ -85,7 +98,7 @@
                     <b th:text="${@timeView.money(overview.previous.priceRubles)}">1 500 ₽</b>
                     <span class="payment-pill no-price" th:if="${overview.previous.paymentStatus.name() == 'NO_PRICE'}">Цена не указана</span>
                     <span class="payment-pill unpaid" th:if="${overview.previous.paymentStatus.name() == 'UNPAID'}">Не оплачено</span>
-                    <span class="payment-pill paid" th:if="${overview.previous.paymentStatus.name() == 'PAID'}">✓ Оплачено</span>
+                    <span class="payment-pill paid" th:if="${overview.previous.paymentStatus.name() == 'PAID'}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>Оплачено</span>
                 </div>
                 <a class="button secondary" th:href="@{/lessons/{id}(id=${overview.previous.id},from='student')}">Открыть занятие</a>
                 <div class="profile-payment-status">
@@ -94,7 +107,7 @@
                         <input type="hidden" name="returnToStudentCard" value="true">
                         <button class="payment-button paid" type="submit" name="status" value="PAID"
                                 th:disabled="${overview.previous.priceRubles == null}"
-                                th:classappend="${overview.previous.paymentStatus.name() == 'PAID'} ? ' active'">✓ Оплачено</button>
+                                th:classappend="${overview.previous.paymentStatus.name() == 'PAID'} ? ' active'"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>Оплачено</button>
                         <button class="payment-button unpaid" type="submit" name="status" value="UNPAID"
                                 th:disabled="${overview.previous.priceRubles == null}"
                                 th:classappend="${overview.previous.paymentStatus.name() == 'UNPAID'} ? ' active'">Не оплачено</button>
@@ -106,9 +119,9 @@
                     <form th:action="@{/teacher/lessons/{id}/homework-status(id=${overview.previous.id})}" method="post" class="homework-status-actions">
                         <input type="hidden" name="returnToStudentCard" value="true">
                         <button type="submit" name="status" value="SUBMITTED" class="homework-status-button submitted"
-                                th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'SUBMITTED'} ? ' active'">✓ Сдал</button>
+                                th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'SUBMITTED'} ? ' active'"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>Сдал</button>
                         <button type="submit" name="status" value="NOT_SUBMITTED" class="homework-status-button not-submitted"
-                                th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'} ? ' active'">× Не сдал</button>
+                                th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'} ? ' active'"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#x}"></use></svg>Не сдал</button>
                         <button type="submit" name="status" value="NOT_MARKED" class="homework-status-button reset"
                                 th:classappend="${overview.previous.homeworkSubmissionStatus.name() == 'NOT_MARKED'} ? ' active'">Не отмечено</button>
                     </form>
@@ -124,7 +137,7 @@
                      th:utext="${materialsHtml != null ? materialsHtml : 'Материалы к прошлому занятию не добавлены.'}"></div>
                 <div class="profile-files" th:if="${!overview.materialFiles.empty}">
                     <a th:each="file : ${overview.materialFiles}" class="profile-file" th:href="@{/attachments/{id}(id=${file.id})}">
-                        <span class="file-icon">↧</span><span><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></span>
+                        <span class="file-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#file}"></use></svg></span><span><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></span>
                     </a>
                 </div>
             </div>
@@ -143,19 +156,19 @@
 
     <section class="panel section-panel student-lessons-section">
         <div class="panel-heading"><div><p class="eyebrow">Расписание</p><h2>Предстоящие <span class="count" th:text="${overview.upcoming.totalElements}">0</span></h2></div></div>
-        <div th:if="${overview.upcoming.content.empty}" class="empty compact"><span>⌁</span><p>Предстоящих занятий нет.</p></div>
+        <div th:if="${overview.upcoming.content.empty}" class="empty compact"><p>Предстоящих занятий нет.</p></div>
         <a th:each="row : ${overview.upcoming.content}" class="student-lesson-row" th:href="@{/lessons/{id}(id=${row.lesson.id},from='student')}">
             <div class="date-chip"><strong th:text="${@timeView.day(row.lesson.startAt)}">01</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">авг</small></div>
             <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">1 августа, 17:00</b><span th:text="${row.lesson.durationMinutes + ' минут'}">60 минут</span></div>
             <div class="lesson-indicators">
-                <span class="finance-indicator" th:text="${@timeView.money(row.lesson.priceRubles)}">1 500 ₽</span><span th:if="${row.lesson.paymentStatus.name() == 'PAID'}" class="paid-indicator">✓ оплачено</span><span th:if="${row.lesson.paymentStatus.name() == 'UNPAID'}" class="unpaid-indicator">не оплачено</span><span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+                <span class="finance-indicator" th:text="${@timeView.money(row.lesson.priceRubles)}">1 500 ₽</span><span th:if="${row.lesson.paymentStatus.name() == 'PAID'}" class="paid-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>оплачено</span><span th:if="${row.lesson.paymentStatus.name() == 'UNPAID'}" class="unpaid-indicator">не оплачено</span><span th:if="${row.lesson.recurring}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#history}"></use></svg>серия</span><span th:if="${row.hasHomework}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#book-open}"></use></svg>домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#x}"></use></svg>не сдал</span><span th:if="${row.hasMaterials}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#book-open}"></use></svg>материалы</span><span th:if="${row.hasFiles}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#file}"></use></svg>файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#lock}"></use></svg>заметка</span>
             </div>
-            <span class="arrow">→</span>
+            <svg class="arrow ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg>
         </a>
         <nav th:if="${overview.upcoming.totalPages > 1}" class="profile-pagination" aria-label="Предстоящие занятия">
-            <a th:if="${overview.upcoming.hasPrevious()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.previousPage()},historyPage=${overview.history.page})}">← Назад</a>
+            <a th:if="${overview.upcoming.hasPrevious()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.previousPage()},historyPage=${overview.history.page})}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Назад</a>
             <span th:text="${'Страница ' + (overview.upcoming.page + 1) + ' из ' + overview.upcoming.totalPages}">Страница 1 из 2</span>
-            <a th:if="${overview.upcoming.hasNext()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.nextPage()},historyPage=${overview.history.page})}">Дальше →</a>
+            <a th:if="${overview.upcoming.hasNext()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.nextPage()},historyPage=${overview.history.page})}">Дальше<svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></a>
         </nav>
     </section>
 
@@ -168,14 +181,14 @@
             <div class="date-chip muted-date"><strong th:text="${@timeView.day(row.lesson.startAt)}">30</strong><small th:text="${@timeView.monthShort(row.lesson.startAt)}">июл</small></div>
             <div class="student-lesson-main"><b th:text="${@timeView.dateTime(row.lesson.startAt)}">30 июля, 17:00</b><span th:text="${row.lesson.status.name() == 'CANCELLED' ? 'Отменено' : row.lesson.durationMinutes + ' минут · проведено'}">Проведено</span></div>
             <div class="lesson-indicators">
-                <span class="finance-indicator" th:text="${@timeView.money(row.lesson.priceRubles)}">1 500 ₽</span><span th:if="${row.lesson.paymentStatus.name() == 'PAID'}" class="paid-indicator">✓ оплачено</span><span th:if="${row.lesson.paymentStatus.name() == 'UNPAID'}" class="unpaid-indicator">не оплачено</span><span th:if="${row.lesson.recurring}">↻ серия</span><span th:if="${row.hasHomework}">✓ домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator">✓ сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator">× не сдал</span><span th:if="${row.hasMaterials}"># материалы</span><span th:if="${row.hasFiles}">↧ файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator">● заметка</span>
+                <span class="finance-indicator" th:text="${@timeView.money(row.lesson.priceRubles)}">1 500 ₽</span><span th:if="${row.lesson.paymentStatus.name() == 'PAID'}" class="paid-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>оплачено</span><span th:if="${row.lesson.paymentStatus.name() == 'UNPAID'}" class="unpaid-indicator">не оплачено</span><span th:if="${row.lesson.recurring}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#history}"></use></svg>серия</span><span th:if="${row.hasHomework}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#book-open}"></use></svg>домашка</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'}" class="submitted-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>сдал</span><span th:if="${row.lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'}" class="not-submitted-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#x}"></use></svg>не сдал</span><span th:if="${row.hasMaterials}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#book-open}"></use></svg>материалы</span><span th:if="${row.hasFiles}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#file}"></use></svg>файлы</span><span th:if="${row.hasPrivateNote}" class="private-indicator"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#lock}"></use></svg>заметка</span>
             </div>
-            <span class="arrow">→</span>
+            <svg class="arrow ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg>
         </a>
         <nav th:if="${overview.history.totalPages > 1}" class="profile-pagination" aria-label="История занятий">
-            <a th:if="${overview.history.hasPrevious()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.page},historyPage=${overview.history.previousPage()})}">← Назад</a>
+            <a th:if="${overview.history.hasPrevious()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.page},historyPage=${overview.history.previousPage()})}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Назад</a>
             <span th:text="${'Страница ' + (overview.history.page + 1) + ' из ' + overview.history.totalPages}">Страница 1 из 2</span>
-            <a th:if="${overview.history.hasNext()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.page},historyPage=${overview.history.nextPage()})}">Дальше →</a>
+            <a th:if="${overview.history.hasNext()}" class="button secondary" th:href="@{/teacher/students/{id}(id=${student.id},upcomingPage=${overview.upcoming.page},historyPage=${overview.history.nextPage()})}">Дальше<svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></a>
         </nav>
     </section>
 </main>

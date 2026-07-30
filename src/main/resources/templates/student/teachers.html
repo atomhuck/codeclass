@@ -2,7 +2,7 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head('Преподаватели')}"></head>
 <body>
-<nav th:replace="~{fragments :: nav(${user}, 'teachers')}"></nav>
+<nav th:replace="~{fragments :: topNav(${user}, 'teachers')}"></nav>
 <main class="page container narrow">
     <div th:if="${success}" class="alert success" th:text="${success}"></div>
     <div th:if="${error}" class="alert error" th:text="${error}"></div>

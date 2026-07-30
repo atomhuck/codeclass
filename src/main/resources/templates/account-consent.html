@@ -10,7 +10,7 @@
             <label>Email<input type="email" name="email" th:value="${email}" required autocomplete="email"></label>
             <label class="legal-check"><input type="checkbox" name="termsAccepted" value="true"><span>Я принимаю <a th:href="@{/legal/terms}" target="_blank">Пользовательское соглашение</a></span></label>
             <label class="legal-check"><input type="checkbox" name="personalDataAccepted" value="true"><span>Я даю <a th:href="@{/legal/personal-data}" target="_blank">согласие на обработку персональных данных</a>. Если мне нет 18 лет, подтверждаю согласие родителя или законного представителя.</span></label>
-            <button class="button primary full">Продолжить <span>→</span></button>
+            <button class="button primary full">Продолжить<svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
         </form>
     </section>
 </main></body></html>

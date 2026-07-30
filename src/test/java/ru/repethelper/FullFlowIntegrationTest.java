@@ -642,7 +642,9 @@ class FullFlowIntegrationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "С предыдущего занятия · только для преподавателя")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
-                        "✓ сдал")));
+                        "class=\"submitted-indicator\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "ui-icons.svg#check")));
 
         mvc.perform(post("/teacher/lessons/{id}/private-note", previous.getId())
                         .with(user(student.getUsername()).roles("STUDENT")).with(csrf())

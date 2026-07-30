@@ -12,7 +12,7 @@
 
         <div th:if="${state == 'GUEST'}" class="stack-form">
             <p>Войдите в существующий аккаунт или зарегистрируйтесь как ученик. После этого вы вернётесь к этому приглашению.</p>
-            <a class="button primary full" th:href="@{/login}">Войти <span>→</span></a>
+            <a class="button primary full" th:href="@{/login}">Войти<svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></a>
             <a class="button secondary full" th:href="@{/register}">Создать аккаунт ученика</a>
         </div>
         <div th:if="${state == 'NOT_STUDENT'}" class="panel invite-state">
@@ -23,7 +23,7 @@
         <div th:if="${state == 'READY'}" class="stack-form">
             <p>Проверьте преподавателя и отправьте запрос. Подключение произойдёт после его подтверждения.</p>
             <form th:action="@{/invite/{code}/request(code=${invite.code})}" method="post">
-                <button class="button primary full" type="submit">Отправить запрос <span>→</span></button>
+                <button class="button primary full" type="submit">Отправить запрос<svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
             </form>
         </div>
         <div th:if="${state == 'PENDING'}" class="panel invite-state">

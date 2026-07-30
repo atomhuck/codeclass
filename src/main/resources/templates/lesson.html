@@ -2,13 +2,13 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head('Занятие')}"></head>
 <body>
-<nav th:replace="~{fragments :: nav(${user}, 'dashboard')}"></nav>
+<nav th:replace="~{fragments :: topNav(${user}, 'dashboard')}"></nav>
 <main class="page container narrow">
     <div th:if="${success}" class="alert success" th:text="${success}"></div><div th:if="${error}" class="alert error" th:text="${error}"></div>
-    <a class="back-link" th:if="${!fromStudentCard}" th:href="${user.role.name() == 'TEACHER'} ? @{/teacher} : @{/student}">← Вернуться к расписанию</a>
-    <a class="back-link" th:if="${fromStudentCard}" th:href="@{/teacher/students/{id}(id=${lesson.student.id})}">← Вернуться к карточке ученика</a>
+    <a class="back-link" th:if="${!fromStudentCard}" th:href="${user.role.name() == 'TEACHER'} ? @{/teacher} : @{/student}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Вернуться к расписанию</a>
+    <a class="back-link" th:if="${fromStudentCard}" th:href="@{/teacher/students/{id}(id=${lesson.student.id})}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Вернуться к карточке ученика</a>
     <header class="lesson-hero panel">
-        <div><div class="lesson-status"><span class="status-pill cancelled" th:if="${lesson.status.name() == 'CANCELLED'}">Отменено</span><span class="status-pill accepted" th:if="${lesson.status.name() != 'CANCELLED' && past}">Проведено</span><span class="status-pill pending" th:if="${lesson.status.name() != 'CANCELLED' && !past}">Запланировано</span><span class="status-pill recurring" th:if="${lesson.recurring}">↻ Еженедельно</span></div><p class="eyebrow">Занятие по информатике</p><h1 th:text="${@timeView.dateTime(lesson.startAt)}">24 июля, 17:00</h1><p th:if="${user.role.name() == 'TEACHER'}">Ученик: <b th:text="${lesson.student.displayName}">Имя</b> · <span th:text="${lesson.durationMinutes + ' минут'}"></span></p><p th:if="${user.role.name() == 'STUDENT'}">Преподаватель: <b th:text="${lesson.teacher.displayName}">Имя</b> · <span th:text="${lesson.durationMinutes + ' минут'}"></span></p></div>
+        <div><div class="lesson-status"><span class="status-pill cancelled" th:if="${lesson.status.name() == 'CANCELLED'}">Отменено</span><span class="status-pill accepted" th:if="${lesson.status.name() != 'CANCELLED' && past}">Проведено</span><span class="status-pill pending" th:if="${lesson.status.name() != 'CANCELLED' && !past}">Запланировано</span><span class="status-pill recurring" th:if="${lesson.recurring}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#history}"></use></svg>Еженедельно</span></div><p class="eyebrow">Занятие по информатике</p><h1 th:text="${@timeView.dateTime(lesson.startAt)}">24 июля, 17:00</h1><p th:if="${user.role.name() == 'TEACHER'}">Ученик: <b th:text="${lesson.student.displayName}">Имя</b> · <span th:text="${lesson.durationMinutes + ' минут'}"></span></p><p th:if="${user.role.name() == 'STUDENT'}">Преподаватель: <b th:text="${lesson.teacher.displayName}">Имя</b> · <span th:text="${lesson.durationMinutes + ' минут'}"></span></p></div>
         <details th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" class="popover"><summary class="button secondary">Перенести</summary><form th:action="@{/teacher/lessons/{id}/reschedule(id=${lesson.id})}" th:object="${lessonForm}" method="post" class="panel popover-panel stack-form"><h3>Перенос занятия</h3><input type="hidden" th:field="*{studentId}"><input type="hidden" th:field="*{recurrence}"><label>Новая дата и время<input type="datetime-local" th:field="*{startAt}" required></label><label>Длительность<input type="number" min="15" max="300" step="15" th:field="*{durationMinutes}"></label><fieldset th:if="${lesson.recurring}" class="choice-fieldset"><legend>Применить изменение</legend><label class="choice-card"><input type="radio" th:field="*{scope}" value="SINGLE"><span><b>Только к этому</b><small>Остальные останутся как были</small></span></label><label class="choice-card"><input type="radio" th:field="*{scope}" value="FOLLOWING"><span><b>К этому и последующим</b><small>Вся будущая часть серии сдвинется</small></span></label></fieldset><button class="button primary">Перенести</button></form></details>
     </header>
 
@@ -38,13 +38,13 @@
             </div>
             <span class="payment-pill no-price" th:if="${lesson.paymentStatus.name() == 'NO_PRICE'}">Цена не указана</span>
             <span class="payment-pill unpaid" th:if="${lesson.paymentStatus.name() == 'UNPAID'}">Не оплачено</span>
-            <span class="payment-pill paid" th:if="${lesson.paymentStatus.name() == 'PAID'}">✓ Оплачено</span>
+            <span class="payment-pill paid" th:if="${lesson.paymentStatus.name() == 'PAID'}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>Оплачено</span>
         </div>
         <div class="finance-actions">
             <form th:action="@{/teacher/lessons/{id}/payment-status(id=${lesson.id})}" method="post" class="payment-actions">
                 <button class="payment-button paid" type="submit" name="status" value="PAID"
                         th:disabled="${lesson.priceRubles == null}"
-                        th:classappend="${lesson.paymentStatus.name() == 'PAID'} ? ' active'">✓ Оплачено</button>
+                        th:classappend="${lesson.paymentStatus.name() == 'PAID'} ? ' active'"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>Оплачено</button>
                 <button class="payment-button unpaid" type="submit" name="status" value="UNPAID"
                         th:disabled="${lesson.priceRubles == null}"
                         th:classappend="${lesson.paymentStatus.name() == 'UNPAID'} ? ' active'">Не оплачено</button>
@@ -102,8 +102,8 @@
     </script>
 
     <form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/lessons/{id}/materials(id=${lesson.id})}" th:object="${materialsForm}" method="post" class="lesson-sections">
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon green">✓</span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><label class="sr-only" for="homeworkText">Текст домашнего задания</label><textarea id="homeworkText" th:field="*{homeworkText}" rows="7" placeholder="Опишите задание, номера задач и полезные ссылки..."></textarea></section>
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan">#</span><div><p class="eyebrow">Видно ученику</p><h2>Материалы занятия</h2></div></div><label class="sr-only" for="lessonNotesText">Материалы занятия</label><textarea id="lessonNotesText" th:field="*{lessonNotesText}" rows="7" placeholder="Темы, разобранные задачи и полезные ссылки для ученика..."></textarea></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon green"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg></span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><label class="sr-only" for="homeworkText">Текст домашнего задания</label><textarea id="homeworkText" th:field="*{homeworkText}" rows="7" placeholder="Опишите задание, номера задач и полезные ссылки..."></textarea></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#book-open}"></use></svg></span><div><p class="eyebrow">Видно ученику</p><h2>Материалы занятия</h2></div></div><label class="sr-only" for="lessonNotesText">Материалы занятия</label><textarea id="lessonNotesText" th:field="*{lessonNotesText}" rows="7" placeholder="Темы, разобранные задачи и полезные ссылки для ученика..."></textarea></section>
         <div class="save-bar"><span>Домашку и материалы видит ученик</span><button class="button primary" type="submit">Сохранить материалы</button></div>
     </form>
 
@@ -116,9 +116,9 @@
         </div>
         <form th:action="@{/teacher/lessons/{id}/homework-status(id=${lesson.id})}" method="post" class="homework-status-actions">
             <button type="submit" name="status" value="SUBMITTED" class="homework-status-button submitted"
-                    th:classappend="${lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'} ? ' active'">✓ Сдал</button>
+                    th:classappend="${lesson.homeworkSubmissionStatus.name() == 'SUBMITTED'} ? ' active'"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg>Сдал</button>
             <button type="submit" name="status" value="NOT_SUBMITTED" class="homework-status-button not-submitted"
-                    th:classappend="${lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'} ? ' active'">× Не сдал</button>
+                    th:classappend="${lesson.homeworkSubmissionStatus.name() == 'NOT_SUBMITTED'} ? ' active'"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#x}"></use></svg>Не сдал</button>
             <button type="submit" name="status" value="NOT_MARKED" class="homework-status-button reset"
                     th:classappend="${lesson.homeworkSubmissionStatus.name() == 'NOT_MARKED'} ? ' active'">Не отмечено</button>
         </form>
@@ -135,21 +135,21 @@
     </form>
 
     <div th:if="${user.role.name() == 'STUDENT'}" class="lesson-sections">
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon green">✓</span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><div class="rich-text" th:classappend="${homeworkHtml == null} ? 'empty-text'" th:utext="${homeworkHtml != null ? homeworkHtml : 'Преподаватель пока не добавил задание.'}"></div></section>
-        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan">#</span><div><p class="eyebrow">Разобрали на уроке</p><h2>Материалы занятия</h2></div></div><div class="rich-text" th:classappend="${lessonNotesHtml == null} ? 'empty-text'" th:utext="${lessonNotesHtml != null ? lessonNotesHtml : 'Заметка появится после занятия.'}"></div></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon green"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg></span><div><p class="eyebrow">До следующей встречи</p><h2>Домашнее задание</h2></div></div><div class="rich-text" th:classappend="${homeworkHtml == null} ? 'empty-text'" th:utext="${homeworkHtml != null ? homeworkHtml : 'Преподаватель пока не добавил задание.'}"></div></section>
+        <section class="panel material-card"><div class="material-heading"><span class="material-icon cyan"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#book-open}"></use></svg></span><div><p class="eyebrow">Разобрали на уроке</p><h2>Материалы занятия</h2></div></div><div class="rich-text" th:classappend="${lessonNotesHtml == null} ? 'empty-text'" th:utext="${lessonNotesHtml != null ? lessonNotesHtml : 'Заметка появится после занятия.'}"></div></section>
     </div>
 
     <section class="attachments-grid">
         <div class="panel attachment-panel">
             <div class="panel-heading"><div><p class="eyebrow">Вложения · <span th:text="${homeworkFiles.size() + '/5'}">0/5</span></p><h2>К домашнему заданию</h2><small>До 15 МБ на файл</small></div></div>
             <div th:if="${homeworkFiles.empty}" class="empty compact"><p>Файлов пока нет</p></div>
-            <div th:each="file : ${homeworkFiles}" class="file-row"><span class="file-icon">↧</span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить">×</button></form></div>
+            <div th:each="file : ${homeworkFiles}" class="file-row"><span class="file-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#file}"></use></svg></span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить" aria-label="Удалить файл"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#trash}"></use></svg></button></form></div>
             <form th:if="${user.role.name() == 'TEACHER' && homeworkFiles.size() < 5}" th:action="@{/teacher/lessons/{id}/attachments(id=${lesson.id})}" method="post" enctype="multipart/form-data" class="upload-form" th:data-remaining="${5 - homeworkFiles.size()}"><input type="hidden" name="category" value="HOMEWORK"><label class="file-picker"><span class="file-picker-label">+ Выбрать файлы</span><input type="file" name="files" multiple required></label><button class="button secondary upload-submit" type="submit">Загрузить</button></form>
         </div>
         <div class="panel attachment-panel">
             <div class="panel-heading"><div><p class="eyebrow">Вложения · <span th:text="${notesFiles.size() + '/5'}">0/5</span></p><h2>К материалам урока</h2><small>До 15 МБ на файл</small></div></div>
             <div th:if="${notesFiles.empty}" class="empty compact"><p>Файлов пока нет</p></div>
-            <div th:each="file : ${notesFiles}" class="file-row"><span class="file-icon">↧</span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить">×</button></form></div>
+            <div th:each="file : ${notesFiles}" class="file-row"><span class="file-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#file}"></use></svg></span><a th:href="@{/attachments/{id}(id=${file.id})}"><b th:text="${file.originalName}">file.pdf</b><small th:text="${@timeView.size(file.sizeBytes)}">1 МБ</small></a><form th:if="${user.role.name() == 'TEACHER'}" th:action="@{/teacher/attachments/{id}/delete(id=${file.id})}" method="post"><input type="hidden" name="lessonId" th:value="${lesson.id}"><button class="icon-button danger" title="Удалить" aria-label="Удалить файл"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#trash}"></use></svg></button></form></div>
             <form th:if="${user.role.name() == 'TEACHER' && notesFiles.size() < 5}" th:action="@{/teacher/lessons/{id}/attachments(id=${lesson.id})}" method="post" enctype="multipart/form-data" class="upload-form" th:data-remaining="${5 - notesFiles.size()}"><input type="hidden" name="category" value="LESSON_NOTES"><label class="file-picker"><span class="file-picker-label">+ Выбрать файлы</span><input type="file" name="files" multiple required></label><button class="button secondary upload-submit" type="submit">Загрузить</button></form>
         </div>
     </section>

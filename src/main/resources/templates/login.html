@@ -8,9 +8,9 @@
         <p class="eyebrow">Личный кабинет</p>
         <h1>Учёба без потерянных файлов и забытых дедлайнов.</h1>
         <p class="lead">Расписание, домашние задания и материалы уроков — в одном спокойном пространстве.</p>
-        <div class="terminal-card" aria-hidden="true">
-            <span><b>$</b> next_lesson --status</span>
-            <span class="terminal-output">готово к работе <i>●</i></span>
+        <div class="auth-feature-card" aria-hidden="true">
+            <span class="auth-feature-icon"><svg class="ui-icon"><use th:href="@{/brand/ui-icons.svg#calendar}"></use></svg></span>
+            <div><b>Всё для занятия рядом</b><span>Расписание, материалы и совместная доска всегда под рукой.</span></div>
         </div>
     </section>
     <section class="auth-card">
@@ -25,14 +25,15 @@
             <span class="vk-logo" aria-hidden="true">
                 <svg viewBox="0 0 48 48"><path d="M24.7 36.7C10 36.7 1.6 26.6 1.3 9.8h7.4c.2 12.3 5.7 17.5 10.1 18.6V9.8h7v10.6c4.3-.5 8.8-5.3 10.3-10.6h7c-1.2 6.5-6.1 11.3-9.6 13.3 3.5 1.6 9.1 5.8 11.2 13.6H37c-1.6-5.1-5.7-9-11.2-9.6v9.6h-1.1z"/></svg>
             </span>
-            <span class="vk-button-label">Продолжить с VK</span><span aria-hidden="true">→</span>
+            <span class="vk-button-label">Продолжить с VK</span>
+            <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg>
         </a>
         <p th:if="${vkEnabled}" class="auth-divider"><span>или</span></p>
         <form th:action="@{/login}" method="post" class="stack-form">
             <label>Логин или email<input name="username" autocomplete="username" required autofocus placeholder="your_login или email"></label>
             <label>Пароль<input type="password" name="password" autocomplete="current-password" required placeholder="••••••••"></label>
             <a class="form-link" th:href="@{/forgot-password}">Забыли пароль?</a>
-            <button class="button primary full" type="submit">Войти <span>→</span></button>
+            <button class="button primary full" type="submit">Войти <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
         </form>
         <p class="auth-switch">Ещё нет аккаунта? <a th:href="@{/register}">Зарегистрироваться</a></p>
     </section>
