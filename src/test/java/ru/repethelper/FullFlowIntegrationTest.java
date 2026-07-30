@@ -78,6 +78,7 @@ class FullFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
         mvc.perform(get("/login")).andExpect(status().isOk());
+        mvc.perform(get("/fonts/Onest-Variable.woff2")).andExpect(status().isOk());
         mvc.perform(get("/teacher")).andExpect(status().is3xxRedirection());
         mvc.perform(get("/teacher").with(user("student").roles("STUDENT"))).andExpect(status().isForbidden());
         mvc.perform(post("/register").with(csrf())
