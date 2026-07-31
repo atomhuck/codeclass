@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Финансы')}"></head>
+<body>
+<nav th:replace="~{fragments :: topNav(${user}, 'finances')}"></nav>
+<main class="page container finance-dashboard" data-finance-page
+      th:data-selected-month="${overview.selectedMonth}" th:data-current-month="${overview.currentMonth}">
+    <div th:if="${success}" class="alert success" th:text="${success}"></div>
+    <div th:if="${error}" class="alert error" th:text="${error}"></div>
+
+    <header class="page-header finance-page-header">
+        <div>
+            <p class="eyebrow">Управленческий учёт</p>
+            <h1>Финансы</h1>
+            <p>Доход, ожидаемые поступления и неоплаченные занятия в одном месте.</p>
+        </div>
+        <span class="finance-private-badge"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#lock}"></use></svg>Видно только вам</span>
+    </header>
+
+    <section class="finance-kpis" aria-label="Показатели выбранного месяца">
+        <article class="finance-kpi expected">
+            <span>Ожидается</span>
+            <strong data-finance-expected th:text="${@timeView.money(overview.selectedSummary.expected)}">0 ₽</strong>
+            <small>Всего за выбранный месяц</small>
+        </article>
+        <article class="finance-kpi received">
+            <span>Получено</span>
+            <strong data-finance-received th:text="${@timeView.money(overview.selectedSummary.received)}">0 ₽</strong>
+            <small>Занятия, отмеченные оплаченными</small>
+        </article>
+        <article class="finance-kpi remaining">
+            <span>Осталось получить</span>
+            <strong data-finance-remaining th:text="${@timeView.money(overview.selectedSummary.remaining)}">0 ₽</strong>
+            <small>Включая будущие занятия месяца</small>
+        </article>
+    </section>
+
+    <p class="finance-accounting-note"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#clock}"></use></svg>Доход относится к месяцу проведения занятия, а не к дате банковского перевода.</p>
+
+    <section class="panel finance-chart-panel" aria-labelledby="finance-chart-title">
+        <div class="finance-chart-heading">
+            <div><p class="eyebrow">Динамика</p><h2 id="finance-chart-title" data-finance-month-title th:text="${@timeView.monthTitle(overview.selectedMonth)}">Август 2026</h2></div>
+            <div class="finance-chart-controls">
+                <button class="icon-button" type="button" data-chart-older aria-label="Показать предыдущие месяцы" title="Предыдущие месяцы"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg></button>
+                <button class="button ghost compact" type="button" data-chart-current th:disabled="${overview.selectedMonth == overview.currentMonth}">Текущий месяц</button>
+                <button class="icon-button" type="button" data-chart-newer aria-label="Показать следующие месяцы" title="Следующие месяцы"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
+            </div>
+        </div>
+        <div class="finance-chart-legend" aria-hidden="true"><span class="received">Получено</span><span class="remaining">Осталось</span></div>
+        <div class="finance-chart-scroll" data-chart-scroll tabindex="0" aria-label="Доход по месяцам. Используйте горизонтальную прокрутку.">
+            <div class="finance-chart-bars" data-chart-bars>
+                <button th:each="point : ${overview.chartMonths}" type="button" class="finance-bar"
+                        th:classappend="${point.month == overview.selectedMonth} ? ' selected'"
+                        th:data-month="${point.month}" th:data-expected="${point.expected}"
+                        th:data-received="${point.received}" th:data-remaining="${point.remaining}"
+                        th:attr="aria-pressed=${point.month == overview.selectedMonth},aria-label=${point.month + ': получено ' + point.received + ' рублей, осталось ' + point.remaining + ' рублей'}">
+                    <span class="finance-bar-track"><span class="finance-bar-remaining"></span><span class="finance-bar-received"></span></span>
+                    <span class="finance-bar-label" th:text="${@timeView.monthShort(point.month)}">авг</span>
+                    <span class="finance-bar-year" th:text="${point.month.year}">2026</span>
+                </button>
+            </div>
+        </div>
+        <div class="finance-chart-tooltip" data-chart-tooltip hidden></div>
+        <p class="finance-chart-error" data-chart-error hidden></p>
+    </section>
+
+    <details class="panel finance-month-panel" open data-month-details>
+        <summary><span><span class="eyebrow">Состав месяца</span><strong data-month-details-title th:text="${'Занятия за ' + @timeView.monthTitle(overview.selectedMonth)}">Занятия за август</strong></span><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#chevron-down}"></use></svg></summary>
+        <div class="finance-list" data-month-list aria-live="polite">
+            <div th:if="${overview.monthLessons.content.empty}" class="empty compact" data-empty-state><p>В этом месяце нет занятий с назначенной стоимостью.</p></div>
+            <article th:each="row : ${overview.monthLessons.content}" class="finance-row" th:classappend="${row.cancelled} ? ' cancelled'" th:data-lesson-id="${row.lessonId}">
+                <span class="finance-row-avatar" th:classappend="${row.deleted} ? ' deleted'" th:text="${row.deleted ? '—' : #strings.substring(row.studentName,0,1)}">А</span>
+                <div class="finance-row-main">
+                    <b th:text="${row.deleted ? 'Удалённое занятие' : row.studentName}">Ученик</b>
+                    <span th:text="${@timeView.dateTime(row.startAt) + (row.deleted ? '' : ' · ' + row.durationMinutes + ' мин')}">1 августа, 12:00</span>
+                    <small th:if="${row.deleted}">Финансовая запись сохранена без данных ученика</small>
+                    <small th:unless="${row.deleted}" th:text="${row.cancelled ? 'Отменённое занятие' : (row.completed ? 'Занятие завершено' : 'Будущее занятие')}">Занятие завершено</small>
+                </div>
+                <div class="finance-row-value"><strong th:text="${@timeView.money(row.amountRubles)}">1 500 ₽</strong><span class="payment-pill paid" th:if="${row.paymentStatus.name() == 'PAID'}">Оплачено</span><span class="payment-pill unpaid" th:if="${row.paymentStatus.name() == 'UNPAID'}">Не оплачено</span></div>
+                <div class="finance-row-actions" th:unless="${row.deleted}">
+                    <a class="icon-button" th:href="@{/lessons/{id}(id=${row.lessonId})}" aria-label="Открыть занятие" title="Открыть занятие"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></a>
+                    <form class="finance-payment-form" th:action="@{/teacher/finances/lessons/{id}/payment-status(id=${row.lessonId})}" method="post">
+                        <input type="hidden" name="status" th:value="${row.paymentStatus.name() == 'PAID' ? 'UNPAID' : 'PAID'}">
+                        <input th:if="${row.paymentRecordId != null}" type="hidden" name="expectedPaymentRecordId" th:value="${row.paymentRecordId}">
+                        <input type="hidden" name="month" th:value="${overview.selectedMonth}">
+                        <button class="button compact" th:classappend="${row.paymentStatus.name() == 'PAID'} ? 'ghost' : 'primary'" type="submit" th:text="${row.paymentStatus.name() == 'PAID' ? 'Вернуть в неоплаченные' : 'Деньги получены'}">Деньги получены</button>
+                    </form>
+                </div>
+            </article>
+        </div>
+        <div class="profile-pagination finance-pagination" data-month-pagination th:hidden="${overview.monthLessons.totalPages <= 1}">
+            <button class="button ghost compact" type="button" data-month-page="prev" th:disabled="${!overview.monthLessons.hasPrevious}">Назад</button>
+            <span data-month-page-label th:text="${'Страница ' + (overview.monthLessons.page + 1) + ' из ' + overview.monthLessons.totalPages}">Страница 1</span>
+            <button class="button ghost compact" type="button" data-month-page="next" th:disabled="${!overview.monthLessons.hasNext}">Далее</button>
+        </div>
+    </details>
+
+    <section class="panel finance-debts-panel" aria-labelledby="debts-title">
+        <div class="finance-debts-heading">
+            <div><p class="eyebrow">Требуют внимания</p><h2 id="debts-title">Неоплаченные занятия</h2><p>Только уже завершившиеся занятия.</p></div>
+            <div class="finance-debt-total"><span data-debt-count th:text="${@timeView.lessonsCount(overview.debts.totalElements)}">0 занятий</span><strong data-debt-amount th:text="${@timeView.money(overview.debts.totalAmount)}">0 ₽</strong></div>
+        </div>
+
+        <form class="finance-filters" method="get" th:action="@{/teacher/finances}" data-debt-filters>
+            <input type="hidden" name="month" th:value="${overview.selectedMonth}">
+            <label><span>Ученик</span><select name="studentId"><option value="">Все ученики</option><option th:each="student : ${students}" th:value="${student.id}" th:selected="${overview.debts.studentId == student.id}" th:text="${student.displayName}">Ученик</option></select></label>
+            <label><span>Период</span><select name="period">
+                <option value="ALL" th:selected="${overview.debts.period.name() == 'ALL'}">Всё время</option>
+                <option value="CURRENT_MONTH" th:selected="${overview.debts.period.name() == 'CURRENT_MONTH'}">Текущий месяц</option>
+                <option value="MONTHS_3" th:selected="${overview.debts.period.name() == 'MONTHS_3'}">Последние 3 месяца</option>
+                <option value="MONTHS_6" th:selected="${overview.debts.period.name() == 'MONTHS_6'}">Последние 6 месяцев</option>
+                <option value="MONTHS_12" th:selected="${overview.debts.period.name() == 'MONTHS_12'}">Последние 12 месяцев</option>
+            </select></label>
+            <button class="button secondary" type="submit">Применить</button>
+        </form>
+
+        <div class="finance-list debts" data-debt-list aria-live="polite">
+            <div th:if="${overview.debts.content.empty}" class="empty compact" data-empty-state><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#check}"></use></svg><h3>Просроченных оплат нет</h3><p>Все завершившиеся занятия оплачены.</p></div>
+            <article th:each="debt : ${overview.debts.content}" class="finance-row debt" th:data-lesson-id="${debt.lessonId}">
+                <span class="finance-row-avatar" th:text="${#strings.substring(debt.studentName,0,1)}">А</span>
+                <div class="finance-row-main"><b th:text="${debt.studentName}">Ученик</b><span th:text="${@timeView.dateTime(debt.startAt) + ' · ' + debt.durationMinutes + ' мин'}">1 августа, 12:00</span><small class="overdue" th:text="${debt.overdueDays == 0 ? 'Оплата ожидается сегодня' : 'Просрочено: ' + debt.overdueDays + ' дн.'}">Просрочено</small></div>
+                <div class="finance-row-value"><strong th:text="${@timeView.money(debt.amountRubles)}">1 500 ₽</strong><span class="payment-pill unpaid">Не оплачено</span></div>
+                <div class="finance-row-actions"><a class="icon-button" th:href="@{/lessons/{id}(id=${debt.lessonId})}" aria-label="Открыть занятие" title="Открыть занятие"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></a><form class="finance-payment-form" th:action="@{/teacher/finances/lessons/{id}/payment-status(id=${debt.lessonId})}" method="post"><input type="hidden" name="status" value="PAID"><input type="hidden" name="month" th:value="${overview.selectedMonth}"><input type="hidden" name="studentId" th:value="${overview.debts.studentId}"><input type="hidden" name="period" th:value="${overview.debts.period}"><input type="hidden" name="debtPage" th:value="${overview.debts.page}"><button class="button primary compact" type="submit">Деньги получены</button></form></div>
+            </article>
+        </div>
+        <div class="profile-pagination finance-pagination" data-debt-pagination th:hidden="${overview.debts.totalPages <= 1}">
+            <a class="button ghost compact" th:classappend="${!overview.debts.hasPrevious} ? ' disabled'" th:href="@{/teacher/finances(month=${overview.selectedMonth},studentId=${overview.debts.studentId},period=${overview.debts.period},debtPage=${overview.debts.page - 1})}">Назад</a>
+            <span data-debt-page-label th:text="${'Страница ' + (overview.debts.page + 1) + ' из ' + overview.debts.totalPages}">Страница 1</span>
+            <a class="button ghost compact" th:classappend="${!overview.debts.hasNext} ? ' disabled'" th:href="@{/teacher/finances(month=${overview.selectedMonth},studentId=${overview.debts.studentId},period=${overview.debts.period},debtPage=${overview.debts.page + 1})}">Далее</a>
+        </div>
+    </section>
+</main>
+
+<div class="finance-toast-region" aria-live="polite" aria-atomic="true" data-finance-toasts></div>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'finances')}"></nav>
+<footer th:replace="~{fragments :: footer}"></footer>
+<script defer th:src="@{/js/finances.js(v=2)}"></script>
+</body>
+</html>

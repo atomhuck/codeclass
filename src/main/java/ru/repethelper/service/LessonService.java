@@ -27,6 +27,7 @@ public class LessonService {
     private final UserRepository users;
     private final ConnectionRequestRepository connections;
     private final LessonSeriesRepository seriesRepository;
+    private final LessonPaymentRecordRepository paymentRecords;
     private final AttachmentRepository attachments;
     private final WhiteboardService whiteboards;
     private final AppNotificationService notifications;
@@ -34,12 +35,14 @@ public class LessonService {
     private final ZoneId zone;
     private final Clock clock;
     public LessonService(LessonRepository lessons, UserRepository users, ConnectionRequestRepository connections,
-                         LessonSeriesRepository seriesRepository, AttachmentRepository attachments, WhiteboardService whiteboards,
+                         LessonSeriesRepository seriesRepository, LessonPaymentRecordRepository paymentRecords,
+                         AttachmentRepository attachments, WhiteboardService whiteboards,
                          AppNotificationService notifications,
                          @org.springframework.beans.factory.annotation.Value("${app.timezone}") String timezone,
                          @org.springframework.beans.factory.annotation.Value("${app.storage-path}") String storagePath,
                          Clock clock) {
         this.lessons = lessons; this.users = users; this.connections = connections; this.seriesRepository = seriesRepository;
+        this.paymentRecords = paymentRecords;
         this.attachments = attachments; this.whiteboards = whiteboards; this.notifications = notifications;
         this.storageRoot = Paths.get(storagePath).toAbsolutePath().normalize();
         this.zone = ZoneId.of(timezone); this.clock = clock;
@@ -204,11 +207,26 @@ public class LessonService {
 
     @Transactional
     public Lesson updatePaymentStatus(User teacher, Long id, PaymentStatus status) {
+        return updatePaymentStatus(teacher, id, status, null).lesson();
+    }
+
+    @Transactional
+    public PaymentStatusUpdate updatePaymentStatus(User teacher, Long id, PaymentStatus status,
+                                                   Long expectedPaymentRecordId) {
         if (status == null || status == PaymentStatus.NO_PRICE)
             throw new IllegalArgumentException("Выберите корректный статус оплаты");
         Lesson lesson = requireTeacherLessonLocked(teacher, id);
+        if (expectedPaymentRecordId != null) {
+            Long currentRecordId = paymentRecords.findByLessonId(id)
+                    .map(LessonPaymentRecord::getId).orElse(null);
+            if (!Objects.equals(currentRecordId, expectedPaymentRecordId))
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Статус оплаты уже изменился в другой вкладке");
+        }
         lesson.updatePaymentStatus(status);
-        return lesson;
+        lessons.flush();
+        Long recordId = paymentRecords.findByLessonId(id).map(LessonPaymentRecord::getId).orElse(null);
+        return new PaymentStatusUpdate(lesson, recordId);
     }
 
     @Transactional(readOnly = true)
@@ -296,6 +314,12 @@ public class LessonService {
         materializeSeries(seriesRepository.findByTeacherAndStudent(teacher, student), from, until);
     }
 
+    @Transactional
+    public void materializeForTeacher(User teacher, Instant from, Instant until) {
+        requireTeacher(teacher);
+        materializeSeries(seriesRepository.findByTeacher(teacher), from, until);
+    }
+
     private void materializeSeries(List<LessonSeries> relevantSeries, Instant from, Instant until) {
         final long weekSeconds = Duration.ofDays(7).toSeconds();
         List<Lesson> generated = new ArrayList<>();
@@ -377,5 +401,6 @@ public class LessonService {
     private void requireTeacher(User user) { if (user.getRole() != Role.TEACHER) throw new ResponseStatusException(HttpStatus.FORBIDDEN); }
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
     public record DeletedLessons(int lessonCount, List<java.util.UUID> boardIds) {}
+    public record PaymentStatusUpdate(Lesson lesson, Long paymentRecordId) {}
     public record PriceUpdateResult(int updatedLessons, int skippedPaidLessons) {}
 }

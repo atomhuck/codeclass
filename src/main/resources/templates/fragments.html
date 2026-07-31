@@ -9,7 +9,7 @@
     <link rel="icon" type="image/svg+xml" th:href="@{/brand/repethelper-mark.svg}">
     <title th:text="${title} + ' — RepetHelper'">RepetHelper</title>
     <script th:src="@{/js/theme.js(v=2)}"></script>
-    <link rel="stylesheet" th:href="@{/css/app.css(v=2)}">
+    <link rel="stylesheet" th:href="@{/css/app.css(v=3)}">
     <script defer th:src="@{/js/ui.js(v=2)}"></script>
     <script defer th:src="@{/js/cookie-notice.js(v=2)}"></script>
     <script defer th:src="@{/js/mobile-calendar.js(v=2)}"></script>
@@ -32,6 +32,9 @@
         <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/students}"
            th:classappend="${area == 'students'} ? 'active'"
            th:attr="aria-current=${area == 'students' ? 'page' : null}">Ученики</a>
+        <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/finances}"
+           th:classappend="${area == 'finances'} ? 'active'"
+           th:attr="aria-current=${area == 'finances' ? 'page' : null}">Финансы</a>
         <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}"
            th:classappend="${area == 'dashboard'} ? 'active'"
            th:attr="aria-current=${area == 'dashboard' ? 'page' : null}">Мои занятия</a>
@@ -95,6 +98,11 @@
     </a>
     <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher} + '#new-lesson'" class="mobile-add">
         <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#plus}"></use></svg><span>Добавить</span>
+    </a>
+    <a th:if="${user.role.name() == 'TEACHER'}" th:href="@{/teacher/finances}"
+       th:classappend="${area == 'finances'} ? 'active'"
+       th:attr="aria-current=${area == 'finances' ? 'page' : null}">
+        <svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#wallet}"></use></svg><span>Финансы</span>
     </a>
     <a th:if="${user.role.name() == 'STUDENT'}" th:href="@{/student}"
        th:classappend="${area == 'dashboard'} ? 'active'"

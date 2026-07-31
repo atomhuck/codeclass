@@ -69,6 +69,8 @@ class FullFlowIntegrationTest {
     @Autowired EmailNotificationRepository emailNotifications;
     @Autowired LessonReminderService lessonReminders;
     @Autowired TeacherStudentOverviewService teacherStudentOverviews;
+    @Autowired FinanceService finances;
+    @Autowired LessonPaymentRecordRepository paymentRecords;
     private MockMvc mvc;
 
     @BeforeEach void setup() { mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build(); }
@@ -743,6 +745,75 @@ class FullFlowIntegrationTest {
                         .with(user(teacher.getUsername()).roles("TEACHER"))
                         .param("status", "UNPAID"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void financesAreIsolatedAndPaidHistorySurvivesLessonDeletion() throws Exception {
+        User teacher = accounts.requireByUsername("teacher");
+        User student = accounts.registerStudent("Финансовый ученик", "finance_dashboard_student", "password123");
+        connections.send(student, "teacher_code");
+        ConnectionRequest request = requestRepository.findByStudentOrderByCreatedAtDesc(student).getFirst();
+        connections.process(teacher, request.getId(), true);
+
+        ZoneId moscow = ZoneId.of("Europe/Moscow");
+        java.time.YearMonth month = java.time.YearMonth.now(moscow).minusMonths(1);
+        Lesson paid = lessons.create(teacher, student.getId(), month.atDay(10).atTime(12, 0),
+                60, LessonRecurrence.ONCE, 1_500);
+        Lesson unpaid = lessons.create(teacher, student.getId(), month.atDay(11).atTime(12, 0),
+                60, LessonRecurrence.ONCE, 2_000);
+        lessons.create(teacher, student.getId(), month.atDay(12).atTime(12, 0),
+                60, LessonRecurrence.ONCE, null);
+
+        LessonService.PaymentStatusUpdate update = lessons.updatePaymentStatus(
+                teacher, paid.getId(), PaymentStatus.PAID, null);
+        assertThat(update.paymentRecordId()).isNotNull();
+        assertThat(paymentRecords.findByLessonId(paid.getId())).isPresent();
+
+        FinanceService.MonthSummary summary = finances.monthSummary(teacher, month);
+        assertThat(summary.received()).isEqualTo(1_500);
+        assertThat(summary.remaining()).isEqualTo(2_000);
+        assertThat(summary.expected()).isEqualTo(3_500);
+        assertThat(finances.debts(teacher, 0, 20, null, DebtPeriod.ALL).content())
+                .extracting(FinanceService.DebtRow::lessonId).contains(unpaid.getId()).doesNotContain(paid.getId());
+
+        mvc.perform(get("/teacher/finances").param("month", month.toString())
+                        .with(user(teacher.getUsername()).roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Финансы")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Финансовый ученик")));
+        mvc.perform(get("/teacher/finances").with(user(student.getUsername()).roles("STUDENT")))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/teacher/finances/lessons/{id}/payment-status", unpaid.getId())
+                        .with(user(teacher.getUsername()).roles("TEACHER"))
+                        .accept(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .param("status", "PAID"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/teacher/finances/lessons/{id}/payment-status", unpaid.getId())
+                        .with(user(teacher.getUsername()).roles("TEACHER")).with(csrf())
+                        .accept(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .param("status", "PAID"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"))
+                .andExpect(jsonPath("$.month.received").value(3_500));
+
+        User otherTeacher = accounts.register("Другой преподаватель финансов", "finance_other_teacher",
+                "finance.other.teacher@example.test", "password123", Role.TEACHER, true);
+        mvc.perform(get("/api/teacher/finances/months/{month}/lessons", month)
+                        .with(user(otherTeacher.getUsername()).roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(post("/teacher/finances/lessons/{id}/payment-status", paid.getId())
+                        .with(user(otherTeacher.getUsername()).roles("TEACHER")).with(csrf())
+                        .accept(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .param("status", "UNPAID"))
+                .andExpect(status().isForbidden());
+
+        Long preservedRecordId = update.paymentRecordId();
+        lessons.delete(teacher, paid.getId(), LessonChangeScope.SINGLE);
+        var preserved = paymentRecords.findById(preservedRecordId).orElseThrow();
+        assertThat(preserved.getLessonId()).isNull();
+        assertThat(preserved.getAmountRubles()).isEqualTo(1_500);
+        assertThat(finances.monthSummary(teacher, month).received()).isEqualTo(3_500);
     }
 
     private User verified(User user) {
