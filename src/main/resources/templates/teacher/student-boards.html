@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Доски ученика')}"></head>
+<body>
+<nav th:replace="~{fragments :: topNav(${user}, 'students')}"></nav>
+<main class="page container narrow student-boards-page">
+    <a class="back-link" th:href="@{/teacher/students/{id}(id=${student.id})}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>К карточке ученика</a>
+    <header class="page-header board-history-header">
+        <div><p class="eyebrow">Карточка ученика</p><h1>Доски занятий</h1><p th:text="${student.displayName}">Ученик</p></div>
+        <span class="count board-count" th:text="${boards.totalElements}">0</span>
+    </header>
+    <section class="panel section-panel board-history-list">
+        <div th:if="${boards.empty}" class="empty compact">
+            <span class="material-icon violet"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#board}"></use></svg></span>
+            <p>Здесь появятся доски после первого открытия из занятия.</p>
+        </div>
+        <article th:each="board : ${boards.content}" class="board-history-row">
+            <div class="date-chip"><strong th:text="${@timeView.day(board.lesson.startAt)}">01</strong><small th:text="${@timeView.monthShort(board.lesson.startAt)}">авг</small></div>
+            <div class="board-history-main"><b th:text="${@timeView.dateTime(board.lesson.startAt)}">1 августа, 17:00</b><span th:text="${board.lesson.durationMinutes + ' минут' + (board.lesson.recurring ? ' · еженедельно' : '')}">60 минут</span></div>
+            <div class="board-history-actions"><a class="button secondary compact" th:href="@{/lessons/{id}(id=${board.lesson.id},from='student')}">Занятие</a><a class="button primary compact" th:href="@{/boards/{id}(id=${board.publicId})}">Открыть доску</a></div>
+        </article>
+        <nav th:if="${boards.totalPages > 1}" class="profile-pagination" aria-label="Страницы истории досок">
+            <a th:if="${boards.hasPrevious()}" class="button secondary" th:href="@{/teacher/students/{id}/boards(id=${student.id},page=${boards.number - 1})}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Назад</a>
+            <span th:text="${'Страница ' + (boards.number + 1) + ' из ' + boards.totalPages}">Страница 1 из 1</span>
+            <a th:if="${boards.hasNext()}" class="button secondary" th:href="@{/teacher/students/{id}/boards(id=${student.id},page=${boards.number + 1})}">Далее<svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></a>
+        </nav>
+    </section>
+</main>
+<nav th:replace="~{fragments :: mobileNav(${user}, 'students')}"></nav>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

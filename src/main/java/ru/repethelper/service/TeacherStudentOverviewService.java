@@ -8,6 +8,7 @@ import ru.repethelper.domain.*;
 import ru.repethelper.repository.AttachmentRepository;
 import ru.repethelper.repository.ConnectionRequestRepository;
 import ru.repethelper.repository.LessonRepository;
+import ru.repethelper.repository.WhiteboardRepository;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -22,14 +23,17 @@ public class TeacherStudentOverviewService {
     private final LessonRepository lessons;
     private final AttachmentRepository attachments;
     private final LessonService lessonService;
+    private final WhiteboardRepository whiteboards;
     private final Clock clock;
 
     public TeacherStudentOverviewService(ConnectionRequestRepository connections, LessonRepository lessons,
-                                         AttachmentRepository attachments, LessonService lessonService, Clock clock) {
+                                         AttachmentRepository attachments, LessonService lessonService,
+                                         WhiteboardRepository whiteboards, Clock clock) {
         this.connections = connections;
         this.lessons = lessons;
         this.attachments = attachments;
         this.lessonService = lessonService;
+        this.whiteboards = whiteboards;
         this.clock = clock;
     }
 
@@ -79,6 +83,7 @@ public class TeacherStudentOverviewService {
                 files(previous, AttachmentCategory.LESSON_NOTES, filesByLesson),
                 toPage(upcomingSelection, filesByLesson),
                 toPage(historySelection, filesByLesson),
+                whiteboards.countVisibleForTeacherAndStudent(teacher, student, LessonStatus.CANCELLED),
                 now
         );
     }
@@ -141,7 +146,7 @@ public class TeacherStudentOverviewService {
 
     public record Overview(ConnectionRequest relation, Lesson nearest, Lesson previous,
                            List<Attachment> homeworkFiles, List<Attachment> materialFiles,
-                           LessonPage upcoming, LessonPage history, Instant now) {
+                           LessonPage upcoming, LessonPage history, long boardCount, Instant now) {
         public boolean nearestInProgress() {
             return nearest != null && !nearest.getStartAt().isAfter(now) && nearest.getEndAt().isAfter(now);
         }

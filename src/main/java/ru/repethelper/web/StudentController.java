@@ -1,6 +1,7 @@
 package ru.repethelper.web;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -34,6 +35,17 @@ public class StudentController {
         model.addAttribute("history", lessons.history(student));
         model.addAttribute("calendar", calendars.build(selected, lessons.forMonth(student, selected)));
         return "student/dashboard";
+    }
+
+    @GetMapping("/calendar")
+    String calendarFragment(Authentication auth, @RequestParam(required = false) Integer year,
+                            @RequestParam(required = false) Integer month, Model model, HttpServletResponse response) {
+        User student = current(auth);
+        YearMonth selected = safeMonth(year, month);
+        response.setHeader("Cache-Control", "no-store");
+        model.addAttribute("calendar", calendars.build(selected, lessons.forMonth(student, selected)));
+        model.addAttribute("viewer", "student");
+        return "calendar :: calendarPanel";
     }
 
     @GetMapping("/upcoming")

@@ -35,7 +35,7 @@
     </section>
 
     <section class="dashboard-grid">
-        <div class="panel calendar-panel">
+        <div th:replace="~{calendar :: calendarPanel(${calendar}, 'teacher')}">
             <div class="panel-heading">
                 <div><p class="eyebrow">Расписание</p><h2 th:text="${calendar.title}">Июль 2026</h2></div>
                 <div class="calendar-nav"><a th:href="@{/teacher(year=${calendar.previousYear},month=${calendar.previousMonth})}" aria-label="Предыдущий месяц"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg></a><a th:href="@{/teacher}">Сегодня</a><a th:href="@{/teacher(year=${calendar.nextYear},month=${calendar.nextMonth})}" aria-label="Следующий месяц"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></a></div>

@@ -54,6 +54,7 @@
     });
   };
   document.addEventListener("DOMContentLoaded", initialise);
+  document.addEventListener("calendar:updated", initialise);
   document.addEventListener("DOMContentLoaded", () => {
     const openNewLesson = (scroll = true) => {
       if (location.pathname !== "/teacher" || location.hash !== "#new-lesson") return;

@@ -4,6 +4,8 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import ru.repethelper.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.util.*;
 
 public interface WhiteboardRepository extends JpaRepository<Whiteboard, Long> {
@@ -19,6 +21,22 @@ public interface WhiteboardRepository extends JpaRepository<Whiteboard, Long> {
 
     @EntityGraph(attributePaths = {"lesson", "lesson.student", "lesson.teacher"})
     List<Whiteboard> findByLessonIn(Collection<Lesson> lessons);
+
+    @EntityGraph(attributePaths = {"lesson", "lesson.student", "lesson.teacher"})
+    @Query(value = "select b from Whiteboard b where b.lesson.teacher = :teacher and b.lesson.student = :student " +
+            "and b.lesson.status <> :cancelled",
+            countQuery = "select count(b) from Whiteboard b where b.lesson.teacher = :teacher and b.lesson.student = :student " +
+                    "and b.lesson.status <> :cancelled")
+    Page<Whiteboard> findVisibleForTeacherAndStudent(@Param("teacher") User teacher,
+                                                      @Param("student") User student,
+                                                      @Param("cancelled") LessonStatus cancelled,
+                                                      Pageable pageable);
+
+    @Query("select count(b) from Whiteboard b where b.lesson.teacher = :teacher and b.lesson.student = :student " +
+            "and b.lesson.status <> :cancelled")
+    long countVisibleForTeacherAndStudent(@Param("teacher") User teacher,
+                                          @Param("student") User student,
+                                          @Param("cancelled") LessonStatus cancelled);
 
     @Query("select b.publicId from Whiteboard b where b.lesson in :lessons")
     List<UUID> findPublicIdsByLessonIn(@Param("lessons") Collection<Lesson> lessons);

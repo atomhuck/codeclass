@@ -327,6 +327,31 @@ class FullFlowIntegrationTest {
                 .doesNotContain(lesson);
     }
 
+    @Test void calendarFragmentsAndStudentBoardHistoryStayPrivate() throws Exception {
+        User teacher = accounts.requireByUsername("teacher");
+        User student = accounts.registerStudent("Ученик досок", "board_history_student", "password123");
+        connections.send(student, "teacher_code");
+        connections.process(teacher, requestRepository.findByStudentOrderByCreatedAtDesc(student).getFirst().getId(), true);
+        Lesson lesson = lessons.create(teacher, student.getId(), LocalDateTime.of(2026, 8, 7, 16, 0), 60);
+        var board = whiteboards.getOrCreate(teacher, lesson);
+
+        mvc.perform(get("/teacher/calendar").param("year", "2026").param("month", "8")
+                        .with(user("teacher").roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("calendar-panel")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Ученик досок")));
+        mvc.perform(get("/teacher/students/{id}/boards", student.getId()).with(user("teacher").roles("TEACHER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(board.getPublicId().toString())));
+
+        User otherTeacher = accounts.register("Другой преподаватель", "board_history_other_teacher",
+                "board.history.other@example.test", "Password12345", Role.TEACHER, true);
+        mvc.perform(get("/teacher/students/{id}/boards", student.getId())
+                        .with(user(otherTeacher.getUsername()).roles("TEACHER")))
+                .andExpect(status().isNotFound());
+    }
+
     @Test void emailVerificationResetAndBruteForceProtectionWork() {
         User user = accounts.register("Проверка безопасности", "security_student",
                 "security.student@example.test", "InitialPassword123", Role.STUDENT, true);

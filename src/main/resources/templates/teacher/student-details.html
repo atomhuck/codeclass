@@ -154,6 +154,17 @@
         </article>
     </section>
 
+    <section class="panel student-boards-preview">
+        <div class="student-boards-preview-copy">
+            <span class="material-icon violet"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#board}"></use></svg></span>
+            <div><p class="eyebrow">Совместная работа</p><h2>Доски занятий</h2><p th:if="${overview.previous != null}" th:text="${'Последнее проведённое занятие: ' + @timeView.dateTime(overview.previous.startAt)}">Последнее занятие</p><p th:if="${overview.previous == null}">После первого проведённого занятия здесь можно будет открыть его доску.</p></div>
+        </div>
+        <div class="student-boards-preview-actions">
+            <a th:if="${overview.previous != null}" class="button primary" th:href="@{/lessons/{id}/board(id=${overview.previous.id})}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#board}"></use></svg>Открыть последнюю доску</a>
+            <a class="button secondary" th:href="@{/teacher/students/{id}/boards(id=${student.id})}">Все доски <span class="count" th:text="${overview.boardCount}">0</span></a>
+        </div>
+    </section>
+
     <section class="panel section-panel student-lessons-section">
         <div class="panel-heading"><div><p class="eyebrow">Расписание</p><h2>Предстоящие <span class="count" th:text="${overview.upcoming.totalElements}">0</span></h2></div></div>
         <div th:if="${overview.upcoming.content.empty}" class="empty compact"><p>Предстоящих занятий нет.</p></div>
