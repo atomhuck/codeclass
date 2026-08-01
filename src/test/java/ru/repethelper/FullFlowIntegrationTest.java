@@ -294,7 +294,9 @@ class FullFlowIntegrationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Каждую неделю")));
         mvc.perform(get("/lessons/{id}", first.getId()).with(user("teacher").roles("TEACHER")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("к этому и всем последующим")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"reschedule-lesson-dialog\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"delete-lesson-dialog\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Это и все последующие")));
     }
 
     @Test void teachersAreStrictlyIsolatedAndPasswordsAreHashed() {

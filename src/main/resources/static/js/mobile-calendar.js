@@ -55,7 +55,23 @@
   };
   document.addEventListener("DOMContentLoaded", initialise);
   document.addEventListener("DOMContentLoaded", () => {
-    if (location.hash === "#new-lesson") document.getElementById("new-lesson")?.setAttribute("open", "");
+    const openNewLesson = (scroll = true) => {
+      if (location.pathname !== "/teacher" || location.hash !== "#new-lesson") return;
+      const panel = document.getElementById("new-lesson");
+      if (!panel) return;
+      panel.setAttribute("open", "");
+      if (scroll) requestAnimationFrame(() => panel.scrollIntoView({ block: "start", behavior: "smooth" }));
+    };
+    openNewLesson(false);
+    window.addEventListener("hashchange", () => openNewLesson());
+    document.addEventListener("click", event => {
+      const add = event.target.closest(".mobile-add");
+      if (!add || location.pathname !== "/teacher") return;
+      if (location.hash === "#new-lesson") {
+        event.preventDefault();
+        openNewLesson();
+      }
+    });
     const updateStudentNav = () => {
       if (location.pathname !== "/student") return;
       const nav = document.querySelector(".mobile-nav");

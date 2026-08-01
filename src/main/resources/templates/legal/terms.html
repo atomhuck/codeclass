@@ -2,7 +2,10 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head('Пользовательское соглашение')}"></head>
 <body><main class="legal-page container narrow">
-    <a class="brand" th:href="@{/login}"><img class="brand-logo" th:src="@{/brand/repethelper-mark.svg}" alt=""><span>RepetHelper</span></a>
+    <nav class="legal-page-nav" aria-label="Навигация документа">
+        <a class="brand" th:href="${legalHome}"><img class="brand-logo" th:src="@{/brand/repethelper-mark.svg}" alt=""><span>RepetHelper</span></a>
+        <a class="button secondary compact" th:href="${legalHome}" data-legal-back><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Назад</a>
+    </nav>
     <article class="panel legal-document">
         <p class="eyebrow">Версия от 24 июля 2026 года</p>
         <h1>Пользовательское соглашение</h1>

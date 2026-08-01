@@ -9,8 +9,28 @@
     <a class="back-link" th:if="${fromStudentCard}" th:href="@{/teacher/students/{id}(id=${lesson.student.id})}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-left}"></use></svg>Вернуться к карточке ученика</a>
     <header class="lesson-hero panel">
         <div><div class="lesson-status"><span class="status-pill cancelled" th:if="${lesson.status.name() == 'CANCELLED'}">Отменено</span><span class="status-pill accepted" th:if="${lesson.status.name() != 'CANCELLED' && past}">Проведено</span><span class="status-pill pending" th:if="${lesson.status.name() != 'CANCELLED' && !past}">Запланировано</span><span class="status-pill recurring" th:if="${lesson.recurring}"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#history}"></use></svg>Еженедельно</span></div><p class="eyebrow">Занятие по информатике</p><h1 th:text="${@timeView.dateTime(lesson.startAt)}">24 июля, 17:00</h1><p th:if="${user.role.name() == 'TEACHER'}">Ученик: <b th:text="${lesson.student.displayName}">Имя</b> · <span th:text="${lesson.durationMinutes + ' минут'}"></span></p><p th:if="${user.role.name() == 'STUDENT'}">Преподаватель: <b th:text="${lesson.teacher.displayName}">Имя</b> · <span th:text="${lesson.durationMinutes + ' минут'}"></span></p></div>
-        <details th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" class="popover"><summary class="button secondary">Перенести</summary><form th:action="@{/teacher/lessons/{id}/reschedule(id=${lesson.id})}" th:object="${lessonForm}" method="post" class="panel popover-panel stack-form"><h3>Перенос занятия</h3><input type="hidden" th:field="*{studentId}"><input type="hidden" th:field="*{recurrence}"><label>Новая дата и время<input type="datetime-local" th:field="*{startAt}" required></label><label>Длительность<input type="number" min="15" max="300" step="15" th:field="*{durationMinutes}"></label><fieldset th:if="${lesson.recurring}" class="choice-fieldset"><legend>Применить изменение</legend><label class="choice-card"><input type="radio" th:field="*{scope}" value="SINGLE"><span><b>Только к этому</b><small>Остальные останутся как были</small></span></label><label class="choice-card"><input type="radio" th:field="*{scope}" value="FOLLOWING"><span><b>К этому и последующим</b><small>Вся будущая часть серии сдвинется</small></span></label></fieldset><button class="button primary">Перенести</button></form></details>
+        <button th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}"
+                class="button secondary" type="button" data-dialog-open="reschedule-lesson-dialog">Перенести</button>
     </header>
+
+    <dialog th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}"
+            id="reschedule-lesson-dialog" class="action-dialog">
+        <form th:action="@{/teacher/lessons/{id}/reschedule(id=${lesson.id})}" th:object="${lessonForm}" method="post" class="action-dialog-card stack-form">
+            <div class="action-dialog-heading">
+                <div><p class="eyebrow">Расписание</p><h2>Перенести занятие</h2></div>
+                <button class="icon-button" type="button" data-dialog-close aria-label="Закрыть"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#x}"></use></svg></button>
+            </div>
+            <input type="hidden" th:field="*{studentId}"><input type="hidden" th:field="*{recurrence}">
+            <label>Новая дата и время<input type="datetime-local" th:field="*{startAt}" required></label>
+            <label>Длительность<input type="number" min="15" max="300" step="15" th:field="*{durationMinutes}"></label>
+            <div class="action-dialog-scope" th:if="${lesson.recurring}">
+                <p>Какие занятия перенести?</p>
+                <button class="scope-action" type="submit" name="scope" value="SINGLE"><span class="scope-action-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#calendar}"></use></svg></span><span><b>Только это занятие</b><small>Остальные встречи не изменятся</small></span><svg class="ui-icon scope-arrow" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
+                <button class="scope-action" type="submit" name="scope" value="FOLLOWING"><span class="scope-action-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#history}"></use></svg></span><span><b>Это и все последующие</b><small>Будущая часть серии сдвинется</small></span><svg class="ui-icon scope-arrow" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
+            </div>
+            <button th:unless="${lesson.recurring}" class="button primary full" type="submit" name="scope" value="SINGLE">Перенести занятие</button>
+        </form>
+    </dialog>
 
     <section class="panel meeting-card">
         <div class="meeting-card-copy">
@@ -153,7 +173,25 @@
             <form th:if="${user.role.name() == 'TEACHER' && notesFiles.size() < 5}" th:action="@{/teacher/lessons/{id}/attachments(id=${lesson.id})}" method="post" enctype="multipart/form-data" class="upload-form" th:data-remaining="${5 - notesFiles.size()}"><input type="hidden" name="category" value="LESSON_NOTES"><label class="file-picker"><span class="file-picker-label">+ Выбрать файлы</span><input type="file" name="files" multiple required></label><button class="button secondary upload-submit" type="submit">Загрузить</button></form>
         </div>
     </section>
-    <form th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" th:action="@{/teacher/lessons/{id}/delete(id=${lesson.id})}" method="post" class="danger-zone"><div><b>Удалить из расписания</b><span class="danger-hint">Занятие, его заметки и вложения исчезнут безвозвратно.</span><fieldset th:if="${lesson.recurring}" class="scope-inline"><legend>Применить</legend><label><input type="radio" name="scope" value="SINGLE" checked> только к этому занятию</label><label><input type="radio" name="scope" value="FOLLOWING"> к этому и всем последующим</label></fieldset></div><button class="button danger-button" type="submit">Удалить</button></form>
+    <section th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" class="danger-zone panel">
+        <div><b>Удалить из расписания</b><span class="danger-hint">Занятие, его заметки и вложения исчезнут безвозвратно.</span></div>
+        <button class="button danger-button" type="button" data-dialog-open="delete-lesson-dialog">Удалить</button>
+    </section>
+    <dialog th:if="${user.role.name() == 'TEACHER' && lesson.status.name() != 'CANCELLED'}" id="delete-lesson-dialog" class="action-dialog danger-dialog">
+        <form th:action="@{/teacher/lessons/{id}/delete(id=${lesson.id})}" method="post" class="action-dialog-card">
+            <div class="action-dialog-heading">
+                <div><p class="eyebrow">Необратимое действие</p><h2>Удалить занятие?</h2></div>
+                <button class="icon-button" type="button" data-dialog-close aria-label="Закрыть"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#x}"></use></svg></button>
+            </div>
+            <p class="action-dialog-copy">Заметки, файлы и доска выбранных занятий будут удалены без возможности восстановления.</p>
+            <div class="action-dialog-scope" th:if="${lesson.recurring}">
+                <p>Какие занятия удалить?</p>
+                <button class="scope-action danger" type="submit" name="scope" value="SINGLE"><span class="scope-action-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#trash}"></use></svg></span><span><b>Только это занятие</b><small>Остальные встречи сохранятся</small></span><svg class="ui-icon scope-arrow" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
+                <button class="scope-action danger" type="submit" name="scope" value="FOLLOWING"><span class="scope-action-icon"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#history}"></use></svg></span><span><b>Это и все последующие</b><small>Серия остановится с этого занятия</small></span><svg class="ui-icon scope-arrow" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#arrow-right}"></use></svg></button>
+            </div>
+            <div class="action-dialog-footer" th:unless="${lesson.recurring}"><button class="button secondary" type="button" data-dialog-close>Отмена</button><button class="button danger-button" type="submit" name="scope" value="SINGLE">Удалить занятие</button></div>
+        </form>
+    </dialog>
     <script>
         document.querySelector(".price-update-form")?.addEventListener("submit", event => {
             const form = event.currentTarget;

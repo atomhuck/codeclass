@@ -9,7 +9,7 @@
     <header class="page-header">
         <div><p class="eyebrow">Панель преподавателя</p><h1>Добрый день, <span th:text="${user.displayName}">Преподаватель</span></h1><p>Планируйте занятия и держите материалы в порядке.</p></div>
         <details id="new-lesson" class="popover" th:attr="open=${selectedStudentId != null ? 'open' : null}"><summary class="button primary"><svg class="ui-icon" aria-hidden="true"><use th:href="@{/brand/ui-icons.svg#plus}"></use></svg>Назначить занятие</summary>
-            <form th:action="@{/teacher/lessons}" th:object="${lessonForm}" method="post" class="panel popover-panel stack-form">
+            <form th:action="@{/teacher/lessons}" th:object="${lessonForm}" method="post" class="panel popover-panel stack-form new-lesson-form">
                 <h3>Новое занятие</h3>
                 <label>Ученик<select id="lesson-student" th:field="*{studentId}" required><option value="">Выберите ученика</option><option th:each="student : ${students}" th:value="${student.id}" th:text="${student.displayName}" th:data-last-price="${latestPrices[student.id]}"></option></select></label>
                 <label>Дата и время<input type="datetime-local" th:field="*{startAt}" required></label>
@@ -23,7 +23,7 @@
                     <label class="choice-card"><input type="radio" th:field="*{recurrence}" value="ONCE"><span><b>Только в этот день</b><small>Одно занятие без повторов</small></span></label>
                     <label class="choice-card"><input type="radio" th:field="*{recurrence}" value="WEEKLY"><span><b id="weekly-label">Каждую неделю</b><small>В этот день недели и это время</small></span></label>
                 </fieldset>
-                <button class="button primary" type="submit">Добавить в календарь</button>
+                <button class="button primary new-lesson-submit" type="submit">Добавить в календарь</button>
             </form>
         </details>
     </header>
