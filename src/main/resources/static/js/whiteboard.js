@@ -2,25 +2,29 @@
   "use strict";
 
   const root = document.getElementById("whiteboard-app");
-  if (!root || !window.fabric) return;
+  const core = window.RepetHelperBoardCore;
+  if (!root || !window.fabric || !core) return;
 
   const boardId = root.dataset.boardId;
   const isTeacher = root.dataset.userRole === "TEACHER";
+  const userName = root.dataset.userName;
   const csrfToken = document.querySelector('meta[name="_csrf"]')?.content || "";
   const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content || "X-CSRF-TOKEN";
   const shell = document.getElementById("canvas-shell");
-  const connectionLabel = document.getElementById("connection-label");
-  const participantCount = document.getElementById("participant-count");
-  const zoomValue = document.getElementById("zoom-value");
-  const uploadInput = document.getElementById("image-upload");
   const remoteCursorLayer = document.getElementById("remote-cursors");
   const objectIndex = new Map();
   const remoteCursors = new Map();
   const remoteStrokes = new Map();
+  const pendingOperations = new Map();
+  const pendingDeletes = new Set();
+  const history = new core.ActionHistory(100, 8 * 1024 * 1024);
   const cursorColors = ["#45D8FF", "#FFD66B", "#FF6B7A", "#A98CFF", "#64F5A6"];
+  const BASE_BOUND = 50_000;
+  const SAFE_COORDINATE = 900_000;
 
   let revision = 0;
   let socket = null;
+  let selfSessionId = null;
   let reconnectAttempt = 0;
   let reconnectTimer = null;
   let boardDeleted = false;
@@ -28,8 +32,9 @@
   let snapshotLoading = false;
   let currentTool = "pencil";
   let previousTool = "pencil";
-  let brushColor = "#64F5A6";
+  let brushColor = "#4F46E5";
   let brushWidth = 4;
+  let fontSize = 28;
   let spacePressed = false;
   let panning = false;
   let panLast = null;
@@ -41,43 +46,36 @@
   let gestureDistance = 0;
   let boardTaskQueue = Promise.resolve();
   let eraserDragging = false;
+  let eraserLastPoint = null;
+  let eraserObjects = new Map();
   let uploadInProgress = false;
-  const pendingDeletes = new Set();
+  let relatedCursor = null;
+  let relatedLoading = false;
+  let workspaceBounds = { minX: -BASE_BOUND, maxX: BASE_BOUND, minY: -BASE_BOUND, maxY: BASE_BOUND };
+
+  document.querySelectorAll(".mobile-colors").forEach(container => {
+    document.querySelectorAll(".desktop-toolbar .color-swatch, .desktop-toolbar .custom-color")
+      .forEach(item => container.append(item.cloneNode(true)));
+  });
 
   const canvas = new fabric.Canvas("board-canvas", {
     selection: false,
     preserveObjectStacking: true,
     stopContextMenu: true,
     fireRightClick: true,
-    enableRetinaScaling: true
+    enableRetinaScaling: true,
+    skipOffscreen: true,
+    selectionColor: "rgba(79,70,229,.12)",
+    selectionBorderColor: "#4F46E5",
+    selectionLineWidth: 1.5
   });
-  canvas.targetFindTolerance = 12;
+  canvas.targetFindTolerance = 14;
   canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
   canvas.freeDrawingBrush.color = brushColor;
   canvas.freeDrawingBrush.width = brushWidth;
 
-  function resizeCanvas() {
-    canvas.setDimensions({ width: shell.clientWidth, height: shell.clientHeight });
-    canvas.requestRenderAll();
-    renderRemoteCursors();
-  }
-  new ResizeObserver(resizeCanvas).observe(shell);
-  resizeCanvas();
-
   function uuid() {
     return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
-
-  function setConnected(value) {
-    connected = value;
-    root.classList.toggle("is-online", value);
-    root.classList.toggle("is-offline", !value);
-    connectionLabel.textContent = value ? "В сети" : "Переподключение…";
-    document.querySelectorAll(".tool-button, #clear-board").forEach(button => {
-      if (button.matches("[data-tool]")) return;
-      button.disabled = !value;
-    });
-    applyTool();
   }
 
   function showToast(message, success = false) {
@@ -88,18 +86,57 @@
     setTimeout(() => toast.remove(), 4200);
   }
 
+  function queueBoardTask(task) {
+    const execution = boardTaskQueue.then(task);
+    boardTaskQueue = execution.catch(error => showToast(error?.message || "Не удалось применить изменение доски"));
+    return execution;
+  }
+
+  function setConnected(value) {
+    connected = value;
+    root.classList.toggle("is-online", value);
+    root.classList.toggle("is-offline", !value);
+    document.querySelectorAll(".connection-label").forEach(item => item.textContent = value ? "В сети" : "Подключение…");
+    document.querySelectorAll(".tool-button, .context-action, [data-clear-board]").forEach(button => button.disabled = !value);
+    applyTool();
+  }
+
+  function updateHistoryButtons() {
+    document.querySelectorAll("[data-undo]").forEach(button => button.disabled = !connected || !history.canUndo());
+    document.querySelectorAll("[data-redo]").forEach(button => button.disabled = !connected || !history.canRedo());
+  }
+
   function send(payload) {
     if (!connected || !socket || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(JSON.stringify(payload));
     return true;
   }
 
-  function queueBoardTask(task) {
-    const execution = boardTaskQueue.then(task);
-    boardTaskQueue = execution.catch(error => {
-      showToast(error?.message || "Не удалось применить изменение доски");
+  function runOperation(payload) {
+    const operationId = payload.operationId || uuid();
+    payload.operationId = operationId;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingOperations.delete(operationId);
+        reject(new Error("Сервер не подтвердил действие. Доска синхронизирована повторно."));
+        queueBoardTask(loadSnapshot).catch(() => {});
+      }, 10_000);
+      pendingOperations.set(operationId, { resolve, reject, timer });
+      if (!send(payload)) {
+        clearTimeout(timer);
+        pendingOperations.delete(operationId);
+        reject(new Error("Дождитесь подключения к доске"));
+      }
     });
-    return execution;
+  }
+
+  function settleOperation(message, error = null) {
+    if (!message.operationId) return;
+    const pending = pendingOperations.get(message.operationId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingOperations.delete(message.operationId);
+    error ? pending.reject(error) : pending.resolve(message);
   }
 
   function connect() {
@@ -108,29 +145,21 @@
     socket = new WebSocket(`${protocol}//${location.host}/ws/boards/${boardId}`);
     socket.onopen = async () => {
       reconnectAttempt = 0;
-      try {
-        await queueBoardTask(loadSnapshot);
-        setConnected(true);
-      } catch (error) {
-        showToast(error.message || "Не удалось синхронизировать доску");
-        socket.close();
-      }
+      try { await queueBoardTask(loadSnapshot); setConnected(true); }
+      catch (error) { showToast(error.message || "Не удалось синхронизировать доску"); socket.close(); }
     };
     socket.onmessage = event => {
-      try {
-        const message = JSON.parse(event.data);
-        queueBoardTask(() => handleMessage(message)).catch(() => {});
-      }
+      try { const message = JSON.parse(event.data); queueBoardTask(() => handleMessage(message)).catch(() => {}); }
       catch { showToast("Получено некорректное событие доски"); }
     };
     socket.onclose = () => {
       setConnected(false);
-      remoteCursors.forEach(item => item.element.remove());
-      remoteCursors.clear();
-      clearRemoteStrokes();
+      finishInteraction();
+      pendingOperations.forEach(pending => { clearTimeout(pending.timer); pending.reject(new Error("Соединение потеряно")); });
+      pendingOperations.clear();
+      remoteCursors.forEach(item => item.element.remove()); remoteCursors.clear(); clearRemoteStrokes();
       if (boardDeleted) return;
-      const delay = Math.min(15000, 500 * (2 ** reconnectAttempt++));
-      reconnectTimer = setTimeout(connect, delay);
+      reconnectTimer = setTimeout(connect, Math.min(15_000, 500 * (2 ** reconnectAttempt++)));
     };
     socket.onerror = () => socket.close();
   }
@@ -139,77 +168,77 @@
     if (snapshotLoading) return;
     snapshotLoading = true;
     try {
-      const response = await fetch(`/api/boards/${boardId}/snapshot`, { headers: { Accept: "application/json" } });
+      const response = await fetch(`/api/boards/${boardId}/snapshot`, { headers: { Accept: "application/json" }, cache: "no-store" });
       if (!response.ok) throw new Error(response.status === 403 ? "Нет доступа к этой доске" : "Не удалось загрузить доску");
       const snapshot = await response.json();
       canvas.discardActiveObject();
       canvas.getObjects().slice().forEach(object => canvas.remove(object));
-      objectIndex.clear();
-      pendingDeletes.clear();
+      objectIndex.clear(); pendingDeletes.clear();
+      workspaceBounds = { minX: -BASE_BOUND, maxX: BASE_BOUND, minY: -BASE_BOUND, maxY: BASE_BOUND };
       for (const item of snapshot.objects) await addOrReplaceObject(item);
       revision = snapshot.revision;
+      setBoardName(snapshot.displayName || root.dataset.boardName);
+      extendWorkspaceForObjects();
+      clampCurrentViewport();
       canvas.requestRenderAll();
-    } finally {
-      snapshotLoading = false;
+    } finally { snapshotLoading = false; }
+  }
+
+  function commonObjectOptions(type) {
+    const selectable = connected && currentTool === "select";
+    return {
+      selectable,
+      evented: currentTool === "eraser" || selectable,
+      perPixelTargetFind: type === "PATH",
+      objectCaching: type !== "IMAGE",
+      cornerColor: "#7C82FF",
+      cornerStrokeColor: "#171A2B",
+      borderColor: "#4F46E5",
+      transparentCorners: false,
+      lockUniScaling: true
+    };
+  }
+
+  function restrictControls(object) {
+    if (object.__boardType === "IMAGE") {
+      object.lockRotation = false;
+      object.lockScalingX = false; object.lockScalingY = false;
+      object.setControlsVisibility?.({ mt: false, mb: false, ml: false, mr: false });
+    } else {
+      object.lockRotation = true;
+      object.lockScalingX = true; object.lockScalingY = true;
+      object.setControlsVisibility?.({ mt: false, mb: false, ml: false, mr: false, tl: false, tr: false, bl: false, br: false, mtr: false });
     }
   }
 
   async function addOrReplaceObject(item) {
-    const matchingObjects = canvas.getObjects().filter(object => object.__boardId === item.id);
-    const existing = objectIndex.get(item.id) || matchingObjects[0];
+    let existing = objectIndex.get(item.id);
     if (existing && existing.__boardType === item.type) {
-      matchingObjects.filter(object => object !== existing).forEach(object => canvas.remove(object));
-      if (item.type === "IMAGE") {
-        existing.set({
-          ...item.data,
-          selectable: currentTool === "select",
-          evented: true,
-          lockRotation: false,
-          cornerColor: "#64F5A6",
-          cornerStrokeColor: "#07110c",
-          borderColor: "#45D8FF",
-          transparentCorners: false,
-          lockUniScaling: true
-        });
-        existing.setControlsVisibility?.({ mt: false, mb: false, ml: false, mr: false });
-        existing.setCoords();
-      }
-      existing.__boardVersion = Math.max(Number(existing.__boardVersion) || 0, Number(item.version) || 0);
-      objectIndex.set(item.id, existing);
+      if (item.type === "TEXT") existing.set({ ...item.data, fontFamily: "Onest" });
+      else existing.set(item.data);
+      existing.set(commonObjectOptions(item.type));
+      existing.__boardVersion = Number(item.version) || 0;
+      existing.opacity = 1; existing.visible = true;
+      restrictControls(existing); existing.setCoords();
       removeRemoteStrokeByObjectId(item.id);
       return existing;
     }
-
+    if (existing) { canvas.remove(existing); objectIndex.delete(item.id); }
     let object;
     if (item.type === "PATH") {
-      const { type: ignoredType, ...pathOptions } = item.data;
-      object = new fabric.Path(item.data.path, {
-        ...pathOptions,
-        selectable: false,
-        evented: true,
-        objectCaching: false,
-        perPixelTargetFind: true
-      });
+      const { type: ignored, ...options } = item.data;
+      object = new fabric.Path(item.data.path, { ...options, ...commonObjectOptions("PATH") });
+    } else if (item.type === "TEXT") {
+      object = new fabric.IText(item.data.text || "", { ...item.data, fontFamily: "Onest", ...commonObjectOptions("TEXT") });
     } else {
-      const imageClass = fabric.FabricImage || fabric.Image;
-      object = await imageClass.fromURL(item.imageUrl, { crossOrigin: "use-credentials" });
-      object.set({
-        ...item.data,
-        selectable: currentTool === "select",
-        evented: true,
-        lockRotation: false,
-        cornerColor: "#64F5A6",
-        cornerStrokeColor: "#07110c",
-        borderColor: "#45D8FF",
-        transparentCorners: false,
-        lockUniScaling: true
-      });
-      object.setControlsVisibility?.({ mt: false, mb: false, ml: false, mr: false });
+      const ImageClass = fabric.FabricImage || fabric.Image;
+      object = await ImageClass.fromURL(item.imageUrl, { crossOrigin: "use-credentials" });
+      object.set({ ...item.data, ...commonObjectOptions("IMAGE") });
     }
     object.__boardId = item.id;
     object.__boardType = item.type;
-    object.__boardVersion = item.version;
-    removeCanvasObjects(item.id);
+    object.__boardVersion = Number(item.version) || 0;
+    restrictControls(object);
     objectIndex.set(item.id, object);
     canvas.add(object);
     canvas.moveObjectTo?.(object, canvas.getObjects().length - 1);
@@ -217,499 +246,296 @@
     return object;
   }
 
-  function removeCanvasObjects(id) {
-    canvas.getObjects().filter(object => object.__boardId === id).forEach(object => canvas.remove(object));
-    objectIndex.delete(id);
-  }
-
   function removeObject(id) {
-    canvas.discardActiveObject();
-    removeCanvasObjects(id);
-    pendingDeletes.delete(id);
-    canvas.requestRenderAll();
+    const object = objectIndex.get(id);
+    if (object) canvas.remove(object);
+    objectIndex.delete(id); pendingDeletes.delete(id);
   }
 
   async function applyRevision(message, mutation) {
     const next = Number(message.revision);
-    if (!Number.isFinite(next)) return;
-    if (next > revision + 1) {
-      await loadSnapshot();
-      return;
-    }
+    if (!Number.isFinite(next)) { await mutation(); return; }
+    if (next > revision + 1) { await loadSnapshot(); return; }
     if (next <= revision) return;
-    await mutation();
-    revision = next;
-    canvas.requestRenderAll();
+    await mutation(); revision = next; canvas.requestRenderAll();
   }
 
   async function handleMessage(message) {
-    switch (message.type) {
-      case "presence.join":
-      case "presence.leave":
-        participantCount.textContent = message.participants ?? 1;
-        if (message.type === "presence.leave" && message.sessionId) removeRemoteCursor(message.sessionId);
-        break;
-      case "cursor.move":
-        updateRemoteCursor(message);
-        break;
-      case "stroke.begin":
-        startRemoteStroke(message);
-        break;
-      case "stroke.points":
-        extendRemoteStroke(message);
-        break;
-      case "object.created":
-      case "object.updated":
-        await applyRevision(message, () => addOrReplaceObject(message.object));
-        break;
-      case "object.deleted":
-        await applyRevision(message, () => removeObject(message.objectId));
-        break;
-      case "board.cleared":
-        await applyRevision(message, () => {
-          canvas.discardActiveObject();
-          canvas.getObjects().slice().forEach(object => canvas.remove(object));
-          objectIndex.clear();
-          pendingDeletes.clear();
-          clearRemoteStrokes();
-        });
-        break;
-      case "board.deleted":
-        boardDeleted = true;
-        clearTimeout(reconnectTimer);
-        setConnected(false);
-        showToast("Доска удалена преподавателем");
-        break;
-      case "sync.required":
-        await loadSnapshot();
-        break;
-      case "error":
-        pendingDeletes.clear();
-        showToast(message.message || "Действие отклонено сервером");
-        break;
+    if (message.type === "operation.rejected" || message.type === "error") {
+      const error = new Error(message.message || "Действие отклонено сервером");
+      error.code = message.code;
+      settleOperation(message, error);
+      if (message.code === "COORDINATES_OUT_OF_RANGE") recoverCoordinates();
+      showToast(error.message);
+      return;
     }
+    if (message.type === "sync.required") {
+      const error = new Error("Объект уже изменён другим участником"); error.code = message.code;
+      settleOperation(message, error); await loadSnapshot(); showToast(error.message); return;
+    }
+    switch (message.type) {
+      case "presence.self": selfSessionId = message.sessionId; updateParticipants(message.participants); break;
+      case "presence.join":
+      case "presence.leave": updateParticipants(message.participants); if (message.type === "presence.leave") removeRemoteCursor(message.sessionId); break;
+      case "cursor.move": if (message.sessionId !== selfSessionId) updateRemoteCursor(message); break;
+      case "stroke.begin": if (message.sessionId !== selfSessionId) startRemoteStroke(message); break;
+      case "stroke.points": if (message.sessionId !== selfSessionId) extendRemoteStroke(message); break;
+      case "object.created":
+      case "object.updated": await applyRevision(message, () => addOrReplaceObject(message.object)); break;
+      case "objects.updated":
+      case "objects.restored": await applyRevision(message, async () => { for (const item of message.objects || []) await addOrReplaceObject(item); }); break;
+      case "object.deleted": await applyRevision(message, () => removeObject(message.objectId)); break;
+      case "objects.deleted": await applyRevision(message, () => (message.objects || []).forEach(item => removeObject(item.id))); break;
+      case "board.cleared": await applyRevision(message, () => { canvas.discardActiveObject(); canvas.getObjects().slice().forEach(item => canvas.remove(item)); objectIndex.clear(); history.clear(); updateHistoryButtons(); }); break;
+      case "board.renamed": if (message.board?.displayName) setBoardName(message.board.displayName); break;
+      case "board.deleted": boardDeleted = true; setConnected(false); showToast("Доска удалена преподавателем"); break;
+    }
+    if (message.actorSessionId === selfSessionId || pendingOperations.has(message.operationId)) settleOperation(message);
   }
+
+  function updateParticipants(value) { document.querySelectorAll(".participant-count").forEach(item => item.textContent = value ?? 1); }
+  function setBoardName(name) { root.dataset.boardName = name; document.querySelectorAll("#board-title-text,.current-board-name").forEach(item => item.textContent = name); document.title = `${name} — RepetHelper`; }
 
   function applyTool() {
     const effective = spacePressed ? "hand" : currentTool;
     canvas.isDrawingMode = connected && effective === "pencil";
-    canvas.selection = false;
-    canvas.skipTargetFind = effective === "pencil" || effective === "hand";
-    canvas.targetFindTolerance = effective === "eraser" ? 14 : 0;
-    canvas.defaultCursor = effective === "hand" ? "grab" : effective === "eraser" ? "crosshair" : "default";
+    canvas.selection = connected && effective === "select";
+    canvas.skipTargetFind = effective === "pencil" || effective === "hand" || effective === "text";
+    canvas.targetFindTolerance = effective === "eraser" ? 16 : 6;
+    canvas.defaultCursor = effective === "hand" ? "grab" : effective === "eraser" ? "crosshair" : effective === "text" ? "text" : "default";
     canvas.hoverCursor = effective === "eraser" ? "crosshair" : effective === "select" ? "move" : canvas.defaultCursor;
     canvas.getObjects().forEach(object => {
-      object.selectable = connected && effective === "select" && object.__boardType === "IMAGE";
-      object.evented = effective === "eraser" || (effective === "select" && object.__boardType === "IMAGE");
+      object.selectable = connected && effective === "select";
+      object.evented = effective === "eraser" || (effective === "select");
+      restrictControls(object);
     });
     if (effective !== "select") canvas.discardActiveObject();
-    canvas.requestRenderAll();
+    document.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("active", button.dataset.tool === currentTool));
+    document.querySelectorAll("[data-context]").forEach(panel => panel.hidden = panel.dataset.context !== currentTool);
+    document.querySelectorAll(".desktop-toolbar .size-control:not(.text-size-control)").forEach(item => item.hidden = currentTool === "text");
+    document.querySelectorAll(".desktop-toolbar .text-size-control").forEach(item => item.hidden = currentTool !== "text");
+    canvas.requestRenderAll(); updateHistoryButtons();
   }
 
-  function selectTool(tool) {
-    currentTool = tool;
-    document.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("active", button.dataset.tool === tool));
-    applyTool();
-  }
-
+  function selectTool(tool) { currentTool = tool; applyTool(); closeMobileMore(); }
   document.querySelectorAll("[data-tool]").forEach(button => button.addEventListener("click", () => selectTool(button.dataset.tool)));
-  document.getElementById("brush-size").addEventListener("input", event => {
+
+  document.querySelectorAll("[data-brush-size]").forEach(input => input.addEventListener("input", event => {
     brushWidth = Number(event.target.value);
-    document.getElementById("brush-size-value").textContent = `${brushWidth} px`;
+    document.querySelectorAll("[data-brush-size]").forEach(item => item.value = brushWidth);
+    document.querySelectorAll("[data-brush-size-value]").forEach(item => item.textContent = `${brushWidth} px`);
     canvas.freeDrawingBrush.width = brushWidth;
-  });
-  document.querySelectorAll(".color-swatch").forEach(button => button.addEventListener("click", () => setBrushColor(button.dataset.color)));
-  document.getElementById("brush-color").addEventListener("input", event => setBrushColor(event.target.value));
+  }));
+  document.querySelectorAll("[data-font-size]").forEach(input => input.addEventListener("input", event => {
+    fontSize = Number(event.target.value);
+    document.querySelectorAll("[data-font-size]").forEach(item => item.value = fontSize);
+    document.querySelectorAll("[data-font-size-value]").forEach(item => item.textContent = `${fontSize} px`);
+    const active = canvas.getActiveObject();
+    if (active?.__boardType === "TEXT" && !active.isEditing) updateExistingTextSize(active, fontSize);
+  }));
 
-  function setBrushColor(color) {
-    brushColor = color.toUpperCase();
-    canvas.freeDrawingBrush.color = brushColor;
-    document.querySelectorAll(".color-swatch").forEach(button => button.classList.toggle("active", button.dataset.color === brushColor));
+  document.querySelectorAll("[data-color]").forEach(button => button.addEventListener("click", () => setColor(button.dataset.color)));
+  document.querySelectorAll("[data-color-input]").forEach(input => input.addEventListener("input", event => setColor(event.target.value)));
+  function setColor(color) {
+    brushColor = color.toUpperCase(); canvas.freeDrawingBrush.color = brushColor;
+    document.querySelectorAll("[data-color]").forEach(button => button.classList.toggle("active", button.dataset.color.toUpperCase() === brushColor));
+    document.querySelectorAll("[data-color-input]").forEach(input => input.value = brushColor);
   }
 
-  function scenePoint(event) {
-    return canvas.getScenePoint ? canvas.getScenePoint(event) : canvas.getPointer(event);
+  function scenePoint(event) { return canvas.getScenePoint ? canvas.getScenePoint(event) : canvas.getPointer(event); }
+  function safeScenePoint(event) {
+    const point = scenePoint(event);
+    if (!core.finitePoint(point, SAFE_COORDINATE)) { recoverCoordinates(); return null; }
+    return point;
   }
 
-  function eraseAt(event, suggestedTarget) {
-    const target = suggestedTarget || canvas.findTarget(event);
-    const objectId = target?.__boardId;
-    if (!objectId || pendingDeletes.has(objectId)) return;
-    pendingDeletes.add(objectId);
-    if (!send({ type: "object.delete", operationId: uuid(), objectId })) pendingDeletes.delete(objectId);
+  function recoverCoordinates() {
+    draftStrokeId = null; draftPoints = []; pendingPreviewPoints = []; clearTimeout(previewTimer); previewTimer = null;
+    eraserDragging = false; eraserLastPoint = null; restorePendingEraser(); panning = false; panLast = null;
+    clampCurrentViewport(); applyTool();
   }
+
+  function clampCurrentViewport() {
+    const next = core.clampViewport(canvas.viewportTransform || [1,0,0,1,0,0], canvas.getWidth(), canvas.getHeight(), workspaceBounds);
+    canvas.setViewportTransform(next); updateGrid(); renderRemoteCursors();
+  }
+  function updateGrid() {
+    const transform = canvas.viewportTransform || [1,0,0,1,0,0];
+    const size = Math.max(8, 24 * transform[0]);
+    shell.style.backgroundSize = `${size}px ${size}px`;
+    shell.style.backgroundPosition = `${transform[4] % size}px ${transform[5] % size}px`;
+  }
+  function extendWorkspaceForObjects() {
+    objectIndex.forEach(object => {
+      const rect = object.getBoundingRect();
+      workspaceBounds.minX = Math.max(-SAFE_COORDINATE, Math.min(workspaceBounds.minX, rect.left - 1000));
+      workspaceBounds.minY = Math.max(-SAFE_COORDINATE, Math.min(workspaceBounds.minY, rect.top - 1000));
+      workspaceBounds.maxX = Math.min(SAFE_COORDINATE, Math.max(workspaceBounds.maxX, rect.left + rect.width + 1000));
+      workspaceBounds.maxY = Math.min(SAFE_COORDINATE, Math.max(workspaceBounds.maxY, rect.top + rect.height + 1000));
+    });
+  }
+
+  function resizeCanvas() { canvas.setDimensions({ width: shell.clientWidth, height: shell.clientHeight }); clampCurrentViewport(); canvas.requestRenderAll(); }
+  new ResizeObserver(resizeCanvas).observe(shell); resizeCanvas();
 
   canvas.on("mouse:down", opt => {
     if (!connected) return;
     const event = opt.e;
+    if (currentTool === "text" && !spacePressed) { const point = safeScenePoint(event); if (point) createTextDraft(point); return; }
     const hand = currentTool === "hand" || spacePressed || event.button === 1;
-    if (hand) {
-      panning = true;
-      canvas.isDrawingMode = false;
-      canvas.defaultCursor = "grabbing";
-      panLast = { x: event.clientX, y: event.clientY };
-      event.preventDefault();
-      return;
-    }
-    if (currentTool === "eraser") {
-      eraserDragging = true;
-      eraseAt(event, opt.target);
-      return;
-    }
+    if (hand) { panning = true; canvas.isDrawingMode = false; canvas.defaultCursor = "grabbing"; panLast = { x: event.clientX, y: event.clientY }; event.preventDefault(); return; }
+    if (currentTool === "eraser") { eraserDragging = true; eraserLastPoint = safeScenePoint(event); collectEraserHits(eraserLastPoint, eraserLastPoint); return; }
     if (currentTool === "pencil") {
-      draftStrokeId = uuid();
-      const point = scenePoint(event);
-      draftPoints = [{ x: point.x, y: point.y }];
-      pendingPreviewPoints = [];
+      const point = safeScenePoint(event); if (!point) return;
+      draftStrokeId = uuid(); draftPoints = [{ x: point.x, y: point.y }]; pendingPreviewPoints = [];
       send({ type: "stroke.begin", strokeId: draftStrokeId, color: brushColor, width: brushWidth, point });
     }
   });
 
   canvas.on("mouse:move", opt => {
     const event = opt.e;
-    if (connected && currentTool === "eraser" && eraserDragging) {
-      eraseAt(event, opt.target);
-    }
     if (panning && panLast) {
-      const transform = canvas.viewportTransform;
-      transform[4] += event.clientX - panLast.x;
-      transform[5] += event.clientY - panLast.y;
-      panLast = { x: event.clientX, y: event.clientY };
-      canvas.requestRenderAll();
-      renderRemoteCursors();
-      return;
+      const viewport = [...canvas.viewportTransform]; viewport[4] += event.clientX - panLast.x; viewport[5] += event.clientY - panLast.y;
+      panLast = { x: event.clientX, y: event.clientY }; canvas.setViewportTransform(core.clampViewport(viewport, canvas.getWidth(), canvas.getHeight(), workspaceBounds)); updateGrid(); canvas.requestRenderAll(); renderRemoteCursors(); return;
     }
-    const point = scenePoint(event);
+    const point = safeScenePoint(event); if (!point) return;
+    if (connected && currentTool === "eraser" && eraserDragging) { collectEraserHits(eraserLastPoint, point); eraserLastPoint = point; }
     const now = performance.now();
-    if (connected && now - lastCursorSentAt >= 50) {
-      lastCursorSentAt = now;
-      send({ type: "cursor.move", x: point.x, y: point.y });
-    }
+    if (connected && now - lastCursorSentAt >= 50) { lastCursorSentAt = now; send({ type: "cursor.move", x: point.x, y: point.y }); }
     if (connected && currentTool === "pencil" && draftStrokeId && event.buttons === 1) {
-      const last = draftPoints[draftPoints.length - 1];
-      if (!last || Math.hypot(point.x - last.x, point.y - last.y) >= .8) {
-        draftPoints.push({ x: point.x, y: point.y });
-        pendingPreviewPoints.push({ x: point.x, y: point.y });
-        schedulePreviewSend();
-      }
+      const last = draftPoints.at(-1);
+      if (!last || Math.hypot(point.x-last.x,point.y-last.y) >= .8 / canvas.getZoom()) { draftPoints.push({x:point.x,y:point.y}); pendingPreviewPoints.push({x:point.x,y:point.y}); schedulePreviewSend(); }
     }
   });
+  canvas.on("mouse:up", () => finishInteraction());
 
-  canvas.on("mouse:up", () => {
-    eraserDragging = false;
-    if (panning) {
-      panning = false;
-      panLast = null;
-      applyTool();
-    }
+  function finishInteraction() {
+    if (eraserDragging) commitEraser();
+    eraserDragging = false; eraserLastPoint = null;
+    if (panning) { panning = false; panLast = null; applyTool(); }
     flushPreview();
-  });
+  }
 
   canvas.on("path:created", opt => {
     const path = opt.path;
-    if (!connected || !draftStrokeId) {
-      canvas.remove(path);
-      return;
-    }
-    path.set({ selectable: false, evented: true, objectCaching: false, perPixelTargetFind: true });
-    path.__boardId = draftStrokeId;
-    path.__boardType = "PATH";
-    objectIndex.set(draftStrokeId, path);
-    const data = path.toObject(["path", "stroke", "strokeWidth", "strokeLineCap", "strokeLineJoin", "left", "top", "scaleX", "scaleY", "angle", "width", "height"]);
-    delete data.type;
-    data.stroke = brushColor;
-    data.strokeWidth = brushWidth;
-    send({ type: "stroke.commit", operationId: draftStrokeId, objectId: draftStrokeId, data });
-    draftStrokeId = null;
-    draftPoints = [];
-    pendingPreviewPoints = [];
+    if (!connected || !draftStrokeId) { canvas.remove(path); return; }
+    const id = draftStrokeId;
+    path.set({ selectable:false,evented:true,objectCaching:true,perPixelTargetFind:true });
+    path.__boardId=id; path.__boardType="PATH"; path.__boardVersion=0; objectIndex.set(id,path);
+    const data=path.toObject(["path","stroke","strokeWidth","strokeLineCap","strokeLineJoin","left","top","scaleX","scaleY","angle","width","height"]); delete data.type;
+    data.stroke=brushColor; data.strokeWidth=brushWidth;
+    draftStrokeId=null; draftPoints=[]; pendingPreviewPoints=[];
+    runOperation({type:"stroke.commit",operationId:id,objectId:id,data}).then(message => {
+      history.push({kind:"visibility",active:true,objects:[versionedView(message.object)]}); updateHistoryButtons();
+    }).catch(() => { removeObject(id); queueBoardTask(loadSnapshot); });
   });
 
-  canvas.on("object:modified", opt => {
-    const object = opt.target;
-    if (!connected || object?.__boardType !== "IMAGE") return;
-    const data = {
-      left: object.left, top: object.top, width: object.width, height: object.height,
-      scaleX: object.scaleX, scaleY: object.scaleY, angle: object.angle || 0
-    };
-    send({
-      type: "object.update", operationId: uuid(), objectId: object.__boardId,
-      expectedVersion: object.__boardVersion, data
-    });
-  });
+  function schedulePreviewSend(){if(!previewTimer)previewTimer=setTimeout(flushPreview,35)}
+  function flushPreview(){clearTimeout(previewTimer);previewTimer=null;if(!draftStrokeId||!pendingPreviewPoints.length)return;const points=core.simplifyPoints(pendingPreviewPoints.splice(0,50),.35);if(points.length)send({type:"stroke.points",strokeId:draftStrokeId,points});if(pendingPreviewPoints.length)schedulePreviewSend()}
 
-  function schedulePreviewSend() {
-    if (previewTimer) return;
-    previewTimer = setTimeout(flushPreview, 35);
+  function createTextDraft(point) {
+    const text = new fabric.IText("", { left:point.x,top:point.y,fontFamily:"Onest",fontSize,fill:brushColor,...commonObjectOptions("TEXT") });
+    text.__boardType="TEXT"; text.__draftText=true; canvas.add(text); canvas.setActiveObject(text); text.enterEditing(); text.hiddenTextarea?.focus(); canvas.requestRenderAll();
   }
+  canvas.on("text:editing:entered", opt => { if (opt.target?.__boardId) opt.target.__textBefore=serializeObject(opt.target); });
+  canvas.on("text:editing:exited", opt => saveText(opt.target));
 
-  function flushPreview() {
-    clearTimeout(previewTimer);
-    previewTimer = null;
-    if (!draftStrokeId || pendingPreviewPoints.length === 0) return;
-    send({ type: "stroke.points", strokeId: draftStrokeId, points: pendingPreviewPoints.splice(0, 50) });
-    if (pendingPreviewPoints.length) schedulePreviewSend();
-  }
-
-  function startRemoteStroke(message) {
-    if (!validPoint(message.point)) return;
-    const key = `${message.sessionId}:${message.strokeId}`;
-    const stroke = new fabric.Polyline([message.point], {
-      fill: null, stroke: message.color || "#45D8FF", strokeWidth: message.width || 4,
-      strokeLineCap: "round", strokeLineJoin: "round", selectable: false, evented: false,
-      opacity: .72, objectCaching: false
-    });
-    stroke.__previewObjectId = message.strokeId;
-    remoteStrokes.set(key, stroke);
-    canvas.add(stroke);
-  }
-
-  function extendRemoteStroke(message) {
-    const key = `${message.sessionId}:${message.strokeId}`;
-    const stroke = remoteStrokes.get(key);
-    if (!stroke || !Array.isArray(message.points)) return;
-    const points = message.points.filter(validPoint).slice(0, 50);
-    if (!points.length) return;
-    stroke.set({ points: stroke.points.concat(points) });
-    stroke.setCoords();
-    canvas.requestRenderAll();
-  }
-
-  function validPoint(point) {
-    return point && Number.isFinite(point.x) && Number.isFinite(point.y)
-      && Math.abs(point.x) <= 1000000 && Math.abs(point.y) <= 1000000;
-  }
-
-  function removeRemoteStrokeByObjectId(id) {
-    remoteStrokes.forEach((stroke, key) => {
-      if (stroke.__previewObjectId !== id) return;
-      canvas.remove(stroke);
-      remoteStrokes.delete(key);
-    });
-  }
-
-  function clearRemoteStrokes() {
-    remoteStrokes.forEach(stroke => canvas.remove(stroke));
-    remoteStrokes.clear();
-  }
-
-  function updateRemoteCursor(message) {
-    if (!Number.isFinite(message.x) || !Number.isFinite(message.y)) return;
-    let cursor = remoteCursors.get(message.sessionId);
-    if (!cursor) {
-      const element = document.createElement("div");
-      element.className = "remote-cursor";
-      element.style.setProperty("--cursor", cursorColors[remoteCursors.size % cursorColors.length]);
-      const name = document.createElement("span");
-      name.textContent = message.actorName || "Участник";
-      element.append(name);
-      remoteCursorLayer.append(element);
-      cursor = { element, x: 0, y: 0 };
-      remoteCursors.set(message.sessionId, cursor);
-    }
-    cursor.x = message.x;
-    cursor.y = message.y;
-    renderRemoteCursors();
-  }
-
-  function renderRemoteCursors() {
-    const transform = canvas.viewportTransform;
-    remoteCursors.forEach(cursor => {
-      const point = fabric.util.transformPoint(new fabric.Point(cursor.x, cursor.y), transform);
-      cursor.element.style.transform = `translate(${point.x}px, ${point.y}px)`;
-    });
-  }
-
-  function removeRemoteCursor(sessionId) {
-    const cursor = remoteCursors.get(sessionId);
-    cursor?.element.remove();
-    remoteCursors.delete(sessionId);
-  }
-
-  function setZoom(next, point = new fabric.Point(canvas.getWidth() / 2, canvas.getHeight() / 2)) {
-    const zoom = Math.max(.1, Math.min(8, next));
-    canvas.zoomToPoint(point, zoom);
-    zoomValue.textContent = `${Math.round(zoom * 100)}%`;
-    renderRemoteCursors();
-  }
-
-  canvas.on("mouse:wheel", opt => {
-    const event = opt.e;
-    const deltaFactor = event.deltaMode === 1
-      ? 16
-      : event.deltaMode === 2
-        ? canvas.getHeight()
-        : 1;
-    const deltaX = event.deltaX * deltaFactor;
-    const deltaY = event.deltaY * deltaFactor;
-
-    if (event.ctrlKey || event.metaKey) {
-      setZoom(
-        canvas.getZoom() * (0.999 ** deltaY),
-        new fabric.Point(event.offsetX, event.offsetY)
-      );
-    } else {
-      const viewport = [...canvas.viewportTransform];
-      viewport[4] -= deltaX;
-      viewport[5] -= deltaY;
-      canvas.setViewportTransform(viewport);
-      canvas.requestRenderAll();
-      renderRemoteCursors();
-    }
-    event.preventDefault();
-    event.stopPropagation();
-  });
-  document.getElementById("zoom-in").addEventListener("click", () => setZoom(canvas.getZoom() * 1.2));
-  document.getElementById("zoom-out").addEventListener("click", () => setZoom(canvas.getZoom() / 1.2));
-  document.getElementById("zoom-reset").addEventListener("click", () => {
-    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    zoomValue.textContent = "100%";
-    canvas.requestRenderAll();
-    renderRemoteCursors();
-  });
-
-  shell.addEventListener("touchstart", event => {
-    if (event.touches.length === 2) {
-      gestureDistance = Math.hypot(
-        event.touches[0].clientX - event.touches[1].clientX,
-        event.touches[0].clientY - event.touches[1].clientY
-      );
-      canvas.isDrawingMode = false;
-    }
-  }, { passive: false });
-  shell.addEventListener("touchmove", event => {
-    if (event.touches.length !== 2 || !gestureDistance) return;
-    const distance = Math.hypot(
-      event.touches[0].clientX - event.touches[1].clientX,
-      event.touches[0].clientY - event.touches[1].clientY
-    );
-    const rect = shell.getBoundingClientRect();
-    const center = new fabric.Point(
-      (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left,
-      (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top
-    );
-    setZoom(canvas.getZoom() * distance / gestureDistance, center);
-    gestureDistance = distance;
-    event.preventDefault();
-  }, { passive: false });
-  shell.addEventListener("touchend", () => {
-    gestureDistance = 0;
-    applyTool();
-  }, { passive: true });
-
-  async function uploadImage(file) {
-    if (!file || !connected || uploadInProgress) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) return showToast("Разрешены только JPEG и PNG");
-    if (file.size > 10 * 1024 * 1024) return showToast("Изображение превышает 10 МБ");
-    uploadInProgress = true;
-    const center = fabric.util.transformPoint(
-      new fabric.Point(shell.clientWidth / 2, shell.clientHeight / 2),
-      fabric.util.invertTransform(canvas.viewportTransform)
-    );
-    const data = new FormData();
-    data.append("file", file);
-    data.append("left", String(center.x));
-    data.append("top", String(center.y));
+  async function saveText(text) {
+    if (!text || text.__savingText) return;
+    text.__savingText=true;
     try {
-      const response = await fetch(`/api/boards/${boardId}/images`, {
-        method: "POST", headers: { [csrfHeader]: csrfToken }, body: data
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Не удалось загрузить изображение");
-      await queueBoardTask(() => handleMessage({
-        type: "object.created",
-        revision: result.revision,
-        object: result.object
-      }));
-      selectTool("select");
-      const inserted = objectIndex.get(result.object.id);
-      if (inserted) {
-        canvas.setActiveObject(inserted);
-        canvas.requestRenderAll();
-      }
-    } catch (error) {
-      showToast(error.message);
-    } finally {
-      uploadInProgress = false;
-    }
+      if (!text.text?.trim()) { if (text.__draftText) canvas.remove(text); return; }
+      if (text.text.length > 2000 || text.text.split(/\r?\n/).length > 50) { showToast("Текст слишком длинный"); if(text.__draftText)canvas.remove(text); else text.set(text.__textBefore); return; }
+      const data=serializeObject(text);
+      if(text.__draftText){const id=uuid();text.__boardId=id;text.__boardVersion=0;text.__draftText=false;objectIndex.set(id,text);const message=await runOperation({type:"text.commit",objectId:id,data});history.push({kind:"visibility",active:true,objects:[versionedView(message.object)]});}
+      else{const before=text.__textBefore||serializeObject(text);const message=await runOperation({type:"object.update",objectId:text.__boardId,expectedVersion:text.__boardVersion,data});history.push({kind:"update",objectId:text.__boardId,before,after:data,version:message.object.version});}
+      updateHistoryButtons();
+    }catch(error){showToast(error.message);await loadSnapshot();}finally{text.__savingText=false;text.__textBefore=null;applyTool()}
   }
 
-  uploadInput.addEventListener("change", async () => {
-    const file = uploadInput.files?.[0];
-    uploadInput.value = "";
-    await uploadImage(file);
+  async function updateExistingTextSize(object,size){if(object.__savingText)return;const before=serializeObject(object);object.set({fontSize:size});object.setCoords();const after=serializeObject(object);try{const message=await runOperation({type:"object.update",objectId:object.__boardId,expectedVersion:object.__boardVersion,data:after});history.push({kind:"update",objectId:object.__boardId,before,after,version:message.object.version});updateHistoryButtons()}catch(error){showToast(error.message);await loadSnapshot()}}
+
+  canvas.on("before:transform", opt => {
+    const target=opt.transform?.target||opt.target;if(!target)return;
+    target.__transformBefore={left:target.left,top:target.top,data:target.__boardId?serializeObject(target):null,objects:activeObjects(target).map(versionedObject)};
+  });
+  canvas.on("selection:created", opt => configureSelection(opt.selected));
+  canvas.on("selection:updated", opt => configureSelection(opt.selected));
+  function configureSelection(selected){const list=selected||[];if(list.length>1){const active=canvas.getActiveObject();if(active){active.lockScalingX=true;active.lockScalingY=true;active.lockRotation=true;active.setControlsVisibility?.({mt:false,mb:false,ml:false,mr:false,tl:false,tr:false,bl:false,br:false,mtr:false})}}}
+  function activeObjects(target=canvas.getActiveObject()){return target?.getObjects?target.getObjects():target?[target]:[]}
+  function versionedObject(object){return{id:object.__boardId,expectedVersion:Number(object.__boardVersion)||0}}
+  function versionedView(item){return{id:item.id,expectedVersion:Number(item.version)||0}}
+
+  canvas.on("object:modified", async opt => {
+    const target=opt.target;if(!connected||!target||target.__savingText)return;
+    const start=target.__transformBefore;if(!start)return;target.__transformBefore=null;
+    if(target.getObjects||target.__boardType!=="IMAGE"){
+      const dx=(target.left??0)-(start.left??0),dy=(target.top??0)-(start.top??0);if(Math.abs(dx)<.0001&&Math.abs(dy)<.0001)return;
+      const requested=start.objects.filter(item=>item.id);canvas.discardActiveObject();
+      try{const message=await runOperation({type:"objects.move",objects:requested,deltaX:dx,deltaY:dy});history.push({kind:"move",objects:(message.objects||[]).map(versionedView),deltaX:dx,deltaY:dy});updateHistoryButtons()}catch(error){showToast(error.message);await loadSnapshot()}
+    }else{
+      const after=serializeObject(target);try{const message=await runOperation({type:"object.update",objectId:target.__boardId,expectedVersion:target.__boardVersion,data:after});history.push({kind:"update",objectId:target.__boardId,before:start.data,after,version:message.object.version});updateHistoryButtons()}catch(error){showToast(error.message);await loadSnapshot()}
+    }
   });
 
-  async function normalizeClipboardImage(file) {
-    if (["image/jpeg", "image/png"].includes(file.type)) return file;
-    const bitmap = await createImageBitmap(file);
-    const buffer = document.createElement("canvas");
-    buffer.width = bitmap.width;
-    buffer.height = bitmap.height;
-    buffer.getContext("2d").drawImage(bitmap, 0, 0);
-    bitmap.close();
-    const blob = await new Promise(resolve => buffer.toBlob(resolve, "image/png"));
-    if (!blob) throw new Error("Не удалось прочитать изображение из буфера обмена");
-    return new File([blob], "clipboard.png", { type: "image/png" });
+  function serializeObject(object){
+    if(object.__boardType==="TEXT"||object.__draftText)return{text:object.text,left:object.left,top:object.top,fontSize:object.fontSize,fill:String(object.fill||brushColor).toUpperCase()};
+    if(object.__boardType==="IMAGE")return{left:object.left,top:object.top,width:object.width,height:object.height,scaleX:object.scaleX,scaleY:object.scaleY,angle:object.angle||0};
+    const data=object.toObject(["path","stroke","strokeWidth","strokeLineCap","strokeLineJoin","left","top","scaleX","scaleY","angle","width","height"]);delete data.type;return data;
   }
 
-  document.addEventListener("paste", async event => {
-    const imageItem = Array.from(event.clipboardData?.items || []).find(item => item.type.startsWith("image/"));
-    if (!imageItem) return;
-    event.preventDefault();
-    if (!connected) return showToast("Дождитесь подключения к доске");
-    try {
-      const file = imageItem.getAsFile();
-      if (!file) throw new Error("В буфере обмена нет изображения");
-      await uploadImage(await normalizeClipboardImage(file));
-    } catch (error) {
-      showToast(error.message || "Не удалось вставить изображение");
-    }
-  });
+  function collectEraserHits(from,to){if(!from||!to)return;const zoom=canvas.getZoom();const distance=Math.hypot(to.x-from.x,to.y-from.y);const steps=Math.max(1,Math.ceil(distance/Math.max(3/zoom,2)));for(let step=0;step<=steps;step++){const ratio=step/steps;const point=new fabric.Point(from.x+(to.x-from.x)*ratio,from.y+(to.y-from.y)*ratio);objectIndex.forEach(object=>{if(eraserObjects.has(object.__boardId)||!object.visible)return;const rect=object.getBoundingRect();const radius=14/zoom;if(point.x>=rect.left-radius&&point.x<=rect.left+rect.width+radius&&point.y>=rect.top-radius&&point.y<=rect.top+rect.height+radius){eraserObjects.set(object.__boardId,{object,opacity:object.opacity});object.set({opacity:.16,evented:false});}})}canvas.requestRenderAll()}
+  function restorePendingEraser(){eraserObjects.forEach(({object,opacity})=>object.set({opacity:opacity??1,visible:true}));eraserObjects.clear();canvas.requestRenderAll()}
+  async function commitEraser(){if(!eraserObjects.size)return;const ids=[...eraserObjects.keys()];eraserObjects.clear();await deleteIds(ids,true)}
 
-  document.getElementById("copy-link").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(location.href);
-      showToast("Ссылка скопирована", true);
-    } catch {
-      window.prompt("Скопируйте ссылку на доску", location.href);
-    }
-  });
+  async function deleteSelection(){const objects=activeObjects().filter(item=>item.__boardId);if(!objects.length)return showToast("Сначала выделите объект");if(objects.length>500)return showToast("За один раз можно удалить не более 500 объектов");canvas.discardActiveObject();await deleteIds(objects.map(item=>item.__boardId),true)}
+  async function deleteIds(ids,record){const selected=ids.map(id=>objectIndex.get(id)).filter(Boolean);const operationId=uuid();selected.forEach(object=>{pendingDeletes.add(object.__boardId);object.set({opacity:.16,evented:false})});canvas.requestRenderAll();try{const message=await runOperation({type:"objects.delete",operationId,objectIds:ids});const views=(message.objects||[]).map(versionedView);if(record&&views.length){history.push({kind:"visibility",active:false,objects:views,deleteOperationId:operationId});updateHistoryButtons()}}catch(error){selected.forEach(object=>{object.set({opacity:1,evented:true});pendingDeletes.delete(object.__boardId)});canvas.requestRenderAll();showToast(error.message);if(error.code!=="UNDO_EXPIRED")await loadSnapshot()}}
+  document.querySelectorAll("[data-delete-selection]").forEach(button=>button.addEventListener("click",deleteSelection));
 
-  const clearButton = document.getElementById("clear-board");
-  if (isTeacher && clearButton) clearButton.addEventListener("click", () => {
-    if (!connected) return;
-    if (confirm("Полностью очистить доску? Все рисунки и фотографии будут удалены без возможности восстановления.")) {
-      send({ type: "board.clear", operationId: uuid() });
-    }
-  });
+  async function setVisibility(action,wantActive){if(wantActive){const message=await runOperation({type:"objects.restore",deleteOperationId:action.deleteOperationId,objects:action.objects});action.objects=(message.objects||[]).map(versionedView);action.active=true}else{const operationId=uuid();const message=await runOperation({type:"objects.delete",operationId,objectIds:action.objects.map(item=>item.id)});action.objects=(message.objects||[]).map(versionedView);action.deleteOperationId=operationId;action.active=false}}
+  async function executeHistoryAction(action,forward){
+    if(action.kind==="visibility")return setVisibility(action,forward?action.initialActive:!action.initialActive);
+    if(action.kind==="move"){const multiplier=forward?1:-1;const message=await runOperation({type:"objects.move",objects:action.objects,deltaX:action.deltaX*multiplier,deltaY:action.deltaY*multiplier});action.objects=(message.objects||[]).map(versionedView);return}
+    if(action.kind==="update"){const data=forward?action.after:action.before;const message=await runOperation({type:"object.update",objectId:action.objectId,expectedVersion:action.version,data});action.version=message.object.version}
+  }
+  function normalizeHistoryAction(action){if(action.kind==="visibility"&&action.initialActive===undefined)action.initialActive=action.active;return action}
+  const originalPush=history.push.bind(history);history.push=action=>originalPush(normalizeHistoryAction(action));
+  async function undo(){const entry=history.takeUndo();if(!entry)return;updateHistoryButtons();try{await executeHistoryAction(entry.action,false);history.commitUndo(entry)}catch(error){history.rollbackUndo(entry);showToast(error.message);if(error.code!=="UNDO_EXPIRED")await loadSnapshot()}updateHistoryButtons()}
+  async function redo(){const entry=history.takeRedo();if(!entry)return;updateHistoryButtons();try{await executeHistoryAction(entry.action,true);history.commitRedo(entry)}catch(error){history.rollbackRedo(entry);showToast(error.message);if(error.code!=="UNDO_EXPIRED")await loadSnapshot()}updateHistoryButtons()}
+  document.querySelectorAll("[data-undo]").forEach(button=>button.addEventListener("click",undo));document.querySelectorAll("[data-redo]").forEach(button=>button.addEventListener("click",redo));
 
-  document.addEventListener("keydown", event => {
-    if (event.target.matches('input:not([type="file"]):not([type="range"]):not([type="color"]), textarea, [contenteditable="true"]')) return;
-    if (event.code === "Space" && !spacePressed) {
-      event.preventDefault();
-      spacePressed = true;
-      previousTool = currentTool;
-      applyTool();
-    } else if (event.ctrlKey || event.metaKey) return;
-    else if (event.key.toLowerCase() === "p") selectTool("pencil");
-    else if (event.key.toLowerCase() === "e") selectTool("eraser");
-    else if (event.key.toLowerCase() === "v") selectTool("select");
-    else if (event.key.toLowerCase() === "h") selectTool("hand");
-    else if ((event.key === "Delete" || event.key === "Backspace") && currentTool === "select") {
-      const object = canvas.getActiveObject();
-      if (object?.__boardId) send({ type: "object.delete", operationId: uuid(), objectId: object.__boardId });
-    }
-  });
-  document.addEventListener("keyup", event => {
-    if (event.code !== "Space") return;
-    spacePressed = false;
-    currentTool = previousTool;
-    applyTool();
-  });
-  window.addEventListener("beforeunload", () => socket?.close());
+  function setZoom(next,point=new fabric.Point(canvas.getWidth()/2,canvas.getHeight()/2)){const zoom=core.clamp(next,.1,8);canvas.zoomToPoint(point,zoom);clampCurrentViewport();document.querySelectorAll(".zoom-value").forEach(item=>item.textContent=`${Math.round(zoom*100)}%`);canvas.requestRenderAll()}
+  function centerBoard(){canvas.setViewportTransform([1,0,0,1,0,0]);document.querySelectorAll(".zoom-value").forEach(item=>item.textContent="100%");updateGrid();canvas.requestRenderAll();renderRemoteCursors()}
+  document.querySelectorAll("[data-zoom-in]").forEach(button=>button.addEventListener("click",()=>setZoom(canvas.getZoom()*1.2)));document.querySelectorAll("[data-zoom-out]").forEach(button=>button.addEventListener("click",()=>setZoom(canvas.getZoom()/1.2)));document.querySelectorAll("[data-zoom-reset],[data-center-board]").forEach(button=>button.addEventListener("click",centerBoard));
+  canvas.on("mouse:wheel",opt=>{const event=opt.e;const factor=event.deltaMode===1?16:event.deltaMode===2?canvas.getHeight():1;const dx=event.deltaX*factor,dy=event.deltaY*factor;if(event.ctrlKey||event.metaKey)setZoom(canvas.getZoom()*(.999**dy),new fabric.Point(event.offsetX,event.offsetY));else{const viewport=[...canvas.viewportTransform];viewport[4]-=dx;viewport[5]-=dy;canvas.setViewportTransform(core.clampViewport(viewport,canvas.getWidth(),canvas.getHeight(),workspaceBounds));updateGrid();canvas.requestRenderAll();renderRemoteCursors()}event.preventDefault();event.stopPropagation()});
 
-  setConnected(false);
-  selectTool("pencil");
-  connect();
+  shell.addEventListener("touchstart",event=>{if(event.touches.length===2){gestureDistance=Math.hypot(event.touches[0].clientX-event.touches[1].clientX,event.touches[0].clientY-event.touches[1].clientY);canvas.isDrawingMode=false}}, {passive:false});
+  shell.addEventListener("touchmove",event=>{if(event.touches.length!==2||!gestureDistance)return;const distance=Math.hypot(event.touches[0].clientX-event.touches[1].clientX,event.touches[0].clientY-event.touches[1].clientY);const rect=shell.getBoundingClientRect();const center=new fabric.Point((event.touches[0].clientX+event.touches[1].clientX)/2-rect.left,(event.touches[0].clientY+event.touches[1].clientY)/2-rect.top);setZoom(canvas.getZoom()*distance/gestureDistance,center);gestureDistance=distance;event.preventDefault()}, {passive:false});
+  shell.addEventListener("touchend",()=>{gestureDistance=0;applyTool()},{passive:true});shell.addEventListener("pointercancel",finishInteraction);window.addEventListener("blur",()=>{spacePressed=false;finishInteraction()});document.addEventListener("visibilitychange",()=>{if(document.hidden)finishInteraction()});
+
+  async function uploadImage(file){if(!file||!connected||uploadInProgress)return;if(!["image/jpeg","image/png"].includes(file.type))return showToast("Разрешены только JPEG и PNG");if(file.size>10*1024*1024)return showToast("Изображение превышает 10 МБ");uploadInProgress=true;const center=fabric.util.transformPoint(new fabric.Point(shell.clientWidth/2,shell.clientHeight/2),fabric.util.invertTransform(canvas.viewportTransform));if(!core.finitePoint(center,SAFE_COORDINATE)){uploadInProgress=false;recoverCoordinates();return showToast("Вернитесь ближе к центру доски")};const operationId=uuid();const data=new FormData();data.append("file",file);data.append("left",String(center.x));data.append("top",String(center.y));data.append("operationId",operationId);try{const response=await fetch(`/api/boards/${boardId}/images`,{method:"POST",headers:{[csrfHeader]:csrfToken},body:data});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||"Не удалось загрузить изображение");await queueBoardTask(()=>handleMessage({type:"object.created",revision:result.revision,object:result.object}));history.push({kind:"visibility",active:true,objects:[versionedView(result.object)]});updateHistoryButtons();selectTool("select");const inserted=objectIndex.get(result.object.id);if(inserted){canvas.setActiveObject(inserted);canvas.requestRenderAll()}}catch(error){showToast(error.message)}finally{uploadInProgress=false}}
+  document.querySelectorAll(".image-upload").forEach(input=>input.addEventListener("change",async()=>{const file=input.files?.[0];input.value="";await uploadImage(file)}));
+  document.addEventListener("paste",async event=>{if(canvas.getActiveObject()?.isEditing)return;const item=Array.from(event.clipboardData?.items||[]).find(value=>value.type.startsWith("image/"));if(!item)return;event.preventDefault();const file=item.getAsFile();if(file)await uploadImage(file)});
+
+  function startRemoteStroke(message){if(!core.finitePoint(message.point,1_000_000))return;const key=`${message.sessionId}:${message.strokeId}`;const stroke=new fabric.Polyline([message.point],{fill:null,stroke:message.color||"#4F46E5",strokeWidth:message.width||4,strokeLineCap:"round",strokeLineJoin:"round",selectable:false,evented:false,opacity:.72,objectCaching:false});stroke.__previewObjectId=message.strokeId;remoteStrokes.set(key,stroke);canvas.add(stroke)}
+  function extendRemoteStroke(message){const stroke=remoteStrokes.get(`${message.sessionId}:${message.strokeId}`);if(!stroke||!Array.isArray(message.points))return;const points=message.points.filter(point=>core.finitePoint(point,1_000_000)).slice(0,50);if(!points.length)return;stroke.set({points:stroke.points.concat(points)});stroke.setCoords();canvas.requestRenderAll()}
+  function removeRemoteStrokeByObjectId(id){remoteStrokes.forEach((stroke,key)=>{if(stroke.__previewObjectId===id){canvas.remove(stroke);remoteStrokes.delete(key)}})}function clearRemoteStrokes(){remoteStrokes.forEach(stroke=>canvas.remove(stroke));remoteStrokes.clear()}
+  function updateRemoteCursor(message){if(!core.finitePoint(message,1_000_000))return;let cursor=remoteCursors.get(message.sessionId);if(!cursor){const element=document.createElement("div");element.className="remote-cursor";element.style.setProperty("--cursor",cursorColors[remoteCursors.size%cursorColors.length]);const name=document.createElement("span");name.textContent=message.actorName||"Участник";element.append(name);remoteCursorLayer.append(element);cursor={element,x:0,y:0};remoteCursors.set(message.sessionId,cursor)}cursor.x=message.x;cursor.y=message.y;renderRemoteCursors()}
+  function renderRemoteCursors(){const transform=canvas.viewportTransform;remoteCursors.forEach(cursor=>{const point=fabric.util.transformPoint(new fabric.Point(cursor.x,cursor.y),transform);cursor.element.style.transform=`translate(${point.x}px, ${point.y}px)`})}function removeRemoteCursor(id){remoteCursors.get(id)?.element.remove();remoteCursors.delete(id)}
+
+  document.querySelectorAll("[data-copy-link]").forEach(button=>button.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(location.href);showToast("Ссылка скопирована",true)}catch{window.prompt("Скопируйте ссылку на доску",location.href)}closeMobileMore()}));
+  document.querySelectorAll("[data-clear-board]").forEach(button=>button.addEventListener("click",async()=>{if(!connected||!confirm("Полностью очистить доску? Это действие нельзя отменить."))return;try{await runOperation({type:"board.clear"});history.clear();updateHistoryButtons();closeMobileMore()}catch(error){showToast(error.message)}}));
+
+  const moreToggle=document.getElementById("mobile-more-toggle"),moreMenu=document.getElementById("mobile-more-menu");function closeMobileMore(){if(!moreMenu)return;moreMenu.hidden=true;moreToggle?.setAttribute("aria-expanded","false")}moreToggle?.addEventListener("click",event=>{event.stopPropagation();moreMenu.hidden=!moreMenu.hidden;moreToggle.setAttribute("aria-expanded",String(!moreMenu.hidden))});document.addEventListener("click",event=>{if(!event.target.closest(".mobile-context"))closeMobileMore()});
+
+  const sidebarToggle=document.getElementById("sidebar-toggle"),sidebarClose=document.getElementById("sidebar-close"),sidebarBackdrop=document.getElementById("sidebar-backdrop"),sidebar=document.getElementById("board-sidebar");function openSidebar(){root.classList.add("sidebar-open");sidebarBackdrop.hidden=false;sidebar.setAttribute("aria-hidden","false");sidebarToggle?.setAttribute("aria-expanded","true");if(!document.querySelector(".related-board")&&!relatedLoading)loadRelatedBoards()};function closeSidebar(){root.classList.remove("sidebar-open");sidebarBackdrop.hidden=true;sidebar.setAttribute("aria-hidden","true");sidebarToggle?.setAttribute("aria-expanded","false")};sidebarToggle?.addEventListener("click",()=>root.classList.contains("sidebar-open")?closeSidebar():openSidebar());sidebarClose?.addEventListener("click",closeSidebar);sidebarBackdrop?.addEventListener("click",closeSidebar);
+  async function loadRelatedBoards(){if(relatedLoading||!matchMedia("(min-width:801px)").matches)return;relatedLoading=true;const list=document.getElementById("related-boards");try{const url=new URL(`/api/boards/${boardId}/related`,location.origin);url.searchParams.set("limit","20");if(relatedCursor)url.searchParams.set("cursor",relatedCursor);const response=await fetch(url,{headers:{Accept:"application/json"},cache:"no-store"});if(!response.ok)throw new Error("Не удалось загрузить список досок");const data=await response.json();if(!relatedCursor)list.replaceChildren();for(const item of data.items||[]){const link=document.createElement("a");link.className="related-board";link.href=`/boards/${item.boardId}`;const strong=document.createElement("strong");strong.textContent=item.displayName;const meta=document.createElement("span");meta.textContent=new Intl.DateTimeFormat("ru-RU",{timeZone:"Europe/Moscow",day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(item.lessonStartAt));link.append(strong,meta);list.append(link)}if(!list.children.length){const empty=document.createElement("div");empty.className="sidebar-empty";empty.textContent="На прошлых занятиях пока нет заполненных досок";list.append(empty)}relatedCursor=data.nextCursor||null;document.getElementById("related-more").hidden=!relatedCursor}catch(error){list.innerHTML="";const item=document.createElement("div");item.className="sidebar-empty";item.textContent=error.message;list.append(item)}finally{relatedLoading=false}}
+  document.getElementById("related-more")?.addEventListener("click",loadRelatedBoards);
+  document.getElementById("board-name-form")?.addEventListener("submit",async event=>{event.preventDefault();const input=document.getElementById("board-name-input");const body=new URLSearchParams();body.set("name",input.value);try{const response=await fetch(`/api/boards/${boardId}/name`,{method:"POST",headers:{[csrfHeader]:csrfToken,"Content-Type":"application/x-www-form-urlencoded",Accept:"application/json"},body});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||"Не удалось сохранить название");setBoardName(result.displayName);showToast("Название сохранено",true)}catch(error){showToast(error.message)}});
+
+  function keyboardBlocked(){const active=canvas.getActiveObject();return active?.isEditing||document.activeElement?.matches?.("input,textarea,[contenteditable=true]")}
+  document.addEventListener("keydown",event=>{if(keyboardBlocked())return;if(event.code==="Space"&&!spacePressed){event.preventDefault();spacePressed=true;previousTool=currentTool;applyTool();return}if((event.ctrlKey||event.metaKey)&&event.code==="KeyZ"){event.preventDefault();event.shiftKey?redo():undo();return}if(event.ctrlKey&&event.code==="KeyY"){event.preventDefault();redo();return}if(event.ctrlKey||event.metaKey)return;const tools={KeyP:"pencil",KeyV:"select",KeyE:"eraser",KeyT:"text",KeyH:"hand"};if(tools[event.code]){event.preventDefault();selectTool(tools[event.code]);return}if((event.code==="Delete"||event.code==="Backspace")&&currentTool==="select"){event.preventDefault();deleteSelection()}if(event.code==="Escape"){closeSidebar();closeMobileMore();canvas.discardActiveObject();canvas.requestRenderAll()}});
+  document.addEventListener("keyup",event=>{if(event.code!=="Space")return;spacePressed=false;currentTool=previousTool;applyTool()});window.addEventListener("beforeunload",()=>socket?.close());
+
+  setConnected(false); selectTool("pencil"); updateGrid(); connect();
 })();

@@ -19,10 +19,13 @@ public class WhiteboardApiController {
     private final WhiteboardService boards;
     private final BoardRealtimeHub hub;
     private final ObjectMapper mapper;
+    private final WhiteboardNavigationService navigation;
 
     public WhiteboardApiController(AccountService accounts, WhiteboardService boards,
-                                   BoardRealtimeHub hub, ObjectMapper mapper) {
+                                   BoardRealtimeHub hub, ObjectMapper mapper,
+                                   WhiteboardNavigationService navigation) {
         this.accounts = accounts; this.boards = boards; this.hub = hub; this.mapper = mapper;
+        this.navigation = navigation;
     }
 
     @GetMapping("/{publicId}/snapshot")
@@ -34,14 +37,35 @@ public class WhiteboardApiController {
     WhiteboardService.MutationResult upload(Authentication auth, @PathVariable UUID publicId,
                                             @RequestParam MultipartFile file,
                                             @RequestParam(defaultValue = "0") double left,
-                                            @RequestParam(defaultValue = "0") double top) {
+                                            @RequestParam(defaultValue = "0") double top,
+                                            @RequestParam(required = false) UUID operationId) {
         var result = boards.uploadImage(current(auth), publicId, file, left, top);
         ObjectNode event = mapper.createObjectNode();
         event.put("type", "object.created");
         event.put("revision", result.revision());
+        if (operationId != null) event.put("operationId", operationId.toString());
         event.set("object", mapper.valueToTree(result.object()));
         hub.broadcast(publicId, event, null);
         return result;
+    }
+
+    @GetMapping("/{publicId}/related")
+    ResponseEntity<WhiteboardNavigationService.RelatedBoards> related(Authentication auth,
+            @PathVariable UUID publicId, @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int limit) {
+        var result = navigation.related(current(auth), publicId, cursor, limit, java.time.Instant.now());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+    }
+
+    @PostMapping("/{publicId}/name")
+    ResponseEntity<WhiteboardService.BoardMetadata> rename(Authentication auth, @PathVariable UUID publicId,
+                                                            @RequestParam(required = false) String name) {
+        var result = boards.rename(current(auth), publicId, name);
+        ObjectNode event = mapper.createObjectNode();
+        event.put("type", "board.renamed");
+        event.set("board", mapper.valueToTree(result));
+        hub.broadcast(publicId, event, null);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
     }
 
     @GetMapping("/{publicId}/images/{objectId}")

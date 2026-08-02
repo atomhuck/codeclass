@@ -46,4 +46,27 @@ public interface WhiteboardRepository extends JpaRepository<Whiteboard, Long> {
     void deleteByLessonIn(@Param("lessons") Collection<Lesson> lessons);
 
     long countByLessonIn(Collection<Lesson> lessons);
+
+    @EntityGraph(attributePaths = {"lesson", "lesson.student", "lesson.teacher"})
+    @Query("select b from Whiteboard b where b.lesson.teacher = :teacher and b.lesson.student = :student " +
+            "and b.lesson.status <> :cancelled and exists (select o.id from WhiteboardObject o " +
+            "where o.board = b and o.deletedAt is null) " +
+            "order by b.lesson.startAt desc, b.id desc")
+    List<Whiteboard> findRelatedActiveBoardsInitial(@Param("teacher") User teacher,
+                                                     @Param("student") User student,
+                                                     @Param("cancelled") LessonStatus cancelled,
+                                                     Pageable pageable);
+
+    @EntityGraph(attributePaths = {"lesson", "lesson.student", "lesson.teacher"})
+    @Query("select b from Whiteboard b where b.lesson.teacher = :teacher and b.lesson.student = :student " +
+            "and b.lesson.status <> :cancelled and exists (select o.id from WhiteboardObject o " +
+            "where o.board = b and o.deletedAt is null) and (b.lesson.startAt < :beforeStart " +
+            "or (b.lesson.startAt = :beforeStart and b.id < :beforeId)) " +
+            "order by b.lesson.startAt desc, b.id desc")
+    List<Whiteboard> findRelatedActiveBoardsBefore(@Param("teacher") User teacher,
+                                                    @Param("student") User student,
+                                                    @Param("cancelled") LessonStatus cancelled,
+                                                    @Param("beforeStart") java.time.Instant beforeStart,
+                                                    @Param("beforeId") Long beforeId,
+                                                    Pageable pageable);
 }

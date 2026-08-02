@@ -31,6 +31,13 @@ public class WhiteboardObject {
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "deleted_by")
+    private User deletedBy;
+    @Column(name = "delete_operation_id")
+    private UUID deleteOperationId;
 
     protected WhiteboardObject() {}
 
@@ -53,8 +60,33 @@ public class WhiteboardObject {
     public long getZOrder() { return zOrder; }
     public long getVersion() { return version; }
     public User getCreatedBy() { return createdBy; }
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public Instant getDeletedAt() { return deletedAt; }
+    public User getDeletedBy() { return deletedBy; }
+    public UUID getDeleteOperationId() { return deleteOperationId; }
+    public boolean isDeleted() { return deletedAt != null; }
     public void update(String data) {
         this.data = data;
+        version++;
+        updatedAt = Instant.now();
+    }
+    public void softDelete(User user, UUID operationId) {
+        if (deletedAt != null) return;
+        deletedAt = Instant.now();
+        deletedBy = user;
+        deleteOperationId = operationId;
+        version++;
+        updatedAt = deletedAt;
+    }
+    public void restore(User user, UUID operationId) {
+        if (deletedAt == null || deletedBy == null || !deletedBy.getId().equals(user.getId())
+                || deleteOperationId == null || !deleteOperationId.equals(operationId)) {
+            throw new IllegalArgumentException("Удалённый объект нельзя восстановить");
+        }
+        deletedAt = null;
+        deletedBy = null;
+        deleteOperationId = null;
         version++;
         updatedAt = Instant.now();
     }

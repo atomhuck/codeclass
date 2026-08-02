@@ -6,6 +6,7 @@ import org.springframework.core.io.*;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -20,6 +21,8 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.*;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -31,8 +34,19 @@ public class WhiteboardService {
     public static final long MAX_BOARD_IMAGE_SIZE = 150L * 1024 * 1024;
     public static final int MAX_OBJECTS = 5_000;
     public static final int MAX_PATH_VALUES = 25_000;
+    public static final int MAX_BATCH_OBJECTS = 500;
+    public static final int MAX_DELETED_OBJECTS = 500;
+    public static final long MAX_DELETED_IMAGE_SIZE = 150L * 1024 * 1024;
+    public static final int MAX_TEXT_LENGTH = 2_000;
+    public static final int MAX_TEXT_LINES = 50;
+    public static final int MIN_FONT_SIZE = 12;
+    public static final int MAX_FONT_SIZE = 144;
+    public static final java.time.Duration DELETED_RETENTION = java.time.Duration.ofHours(2);
     private static final Pattern COLOR = Pattern.compile("^#[0-9a-fA-F]{6}$");
     private static final double MAX_COORDINATE = 1_000_000d;
+    private static final ZoneId MOSCOW = ZoneId.of("Europe/Moscow");
+    private static final DateTimeFormatter DEFAULT_BOARD_NAME = DateTimeFormatter
+            .ofPattern("d MMMM, HH:mm", Locale.forLanguageTag("ru-RU"));
 
     private final WhiteboardRepository boards;
     private final WhiteboardObjectRepository objects;
@@ -74,17 +88,57 @@ public class WhiteboardService {
         List<ObjectView> views = objects.findByBoardOrderByZOrderAsc(board).stream()
                 .map(item -> view(item, publicId)).toList();
         return new Snapshot(publicId, board.getRevision(), board.getLesson().getId(),
-                board.getLesson().getStudent().getDisplayName(), views);
+                board.getLesson().getStudent().getDisplayName(), displayName(board), views);
+    }
+
+    @Transactional
+    public BoardMetadata rename(User user, UUID publicId, String requestedName) {
+        Whiteboard board = locked(user, publicId);
+        if (user.getRole() != Role.TEACHER || !board.getLesson().getTeacher().getId().equals(user.getId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        String name = requestedName == null ? null : requestedName.strip();
+        if (name != null && name.length() > 120)
+            throw new IllegalArgumentException("Название не может быть длиннее 120 символов");
+        board.rename(name);
+        return metadata(board);
+    }
+
+    @Transactional(readOnly = true)
+    public BoardMetadata metadata(User user, UUID publicId) {
+        return metadata(requireAccessible(user, publicId));
+    }
+
+    public String displayName(Whiteboard board) {
+        if (board.getCustomName() != null && !board.getCustomName().isBlank()) return board.getCustomName();
+        return "Доска · " + DEFAULT_BOARD_NAME.format(board.getLesson().getStartAt().atZone(MOSCOW));
+    }
+
+    private BoardMetadata metadata(Whiteboard board) {
+        return new BoardMetadata(board.getPublicId(), board.getLesson().getId(), displayName(board),
+                board.getLesson().getStartAt(), board.getLesson().getDurationMinutes());
     }
 
     @Transactional
     public MutationResult createPath(User user, UUID publicId, UUID objectId, JsonNode data) {
         Whiteboard board = locked(user, publicId);
         Optional<WhiteboardObject> duplicate = objects.findById(objectId);
-        if (duplicate.isPresent()) return new MutationResult(board.getRevision(), view(duplicate.get(), publicId), false);
-        if (objects.countByBoard(board) >= MAX_OBJECTS) throw new IllegalArgumentException("На доске достигнут лимит объектов");
+        if (duplicate.isPresent()) return duplicateCreate(board, publicId, duplicate.get(), WhiteboardObjectType.PATH);
+        requireObjectCapacity(board);
         validatePath(data);
         WhiteboardObject item = objects.save(new WhiteboardObject(objectId, board, WhiteboardObjectType.PATH,
+                json(data), objects.maxZOrder(board) + 1, user));
+        long revision = board.nextRevision();
+        return new MutationResult(revision, view(item, publicId), true);
+    }
+
+    @Transactional
+    public MutationResult createText(User user, UUID publicId, UUID objectId, JsonNode data) {
+        Whiteboard board = locked(user, publicId);
+        Optional<WhiteboardObject> duplicate = objects.findById(objectId);
+        if (duplicate.isPresent()) return duplicateCreate(board, publicId, duplicate.get(), WhiteboardObjectType.TEXT);
+        requireObjectCapacity(board);
+        validateText(data);
+        WhiteboardObject item = objects.save(new WhiteboardObject(objectId, board, WhiteboardObjectType.TEXT,
                 json(data), objects.maxZOrder(board) + 1, user));
         long revision = board.nextRevision();
         return new MutationResult(revision, view(item, publicId), true);
@@ -95,9 +149,9 @@ public class WhiteboardService {
         Whiteboard board = locked(user, publicId);
         WhiteboardObject item = objects.findByIdAndBoard(objectId, board)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        if (item.getType() != WhiteboardObjectType.IMAGE) throw new IllegalArgumentException("Рисунок нельзя перемещать");
+        if (item.isDeleted()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         if (item.getVersion() != expectedVersion) throw new VersionConflictException(view(item, publicId));
-        validateImageTransform(data);
+        validateObjectData(item.getType(), data);
         item.update(json(data));
         long revision = board.nextRevision();
         return new MutationResult(revision, view(item, publicId), true);
@@ -105,19 +159,85 @@ public class WhiteboardService {
 
     @Transactional
     public DeleteResult deleteObject(User user, UUID publicId, UUID objectId) {
+        return deleteObject(user, publicId, objectId, UUID.randomUUID());
+    }
+
+    @Transactional
+    public DeleteResult deleteObject(User user, UUID publicId, UUID objectId, UUID operationId) {
         Whiteboard board = locked(user, publicId);
         Optional<WhiteboardObject> found = objects.findByIdAndBoard(objectId, board);
-        if (found.isEmpty()) return new DeleteResult(board.getRevision(), objectId, false, null);
+        if (found.isEmpty() || found.get().isDeleted())
+            return new DeleteResult(board.getRevision(), objectId, false, null);
         WhiteboardObject item = found.get();
-        Optional<WhiteboardImage> storedImage = images.findById(objectId);
-        String storedName = storedImage.map(WhiteboardImage::getStoredName).orElse(null);
-        storedImage.ifPresent(images::delete);
-        if (storedImage.isPresent()) images.flush();
-        objects.delete(item);
-        objects.flush();
+        item.softDelete(user, operationId);
         long revision = board.nextRevision();
-        deletePhysicalAfterCommit(storedName == null ? List.of() : List.of(storedName));
-        return new DeleteResult(revision, objectId, true, storedName);
+        purgeExcessDeleted(board);
+        return new DeleteResult(revision, objectId, true, null);
+    }
+
+    @Transactional
+    public BatchMutationResult deleteObjects(User user, UUID publicId, UUID operationId, List<UUID> objectIds) {
+        Whiteboard board = locked(user, publicId);
+        List<UUID> ids = normalizedIds(objectIds);
+        List<WhiteboardObject> changed = new ArrayList<>();
+        for (UUID id : ids) {
+            WhiteboardObject item = objects.findByIdAndBoard(id, board)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            if (item.isDeleted()) continue;
+            item.softDelete(user, operationId);
+            changed.add(item);
+        }
+        if (changed.isEmpty()) return new BatchMutationResult(board.getRevision(), List.of(), false);
+        long revision = board.nextRevision();
+        List<ObjectView> views = changed.stream().map(item -> view(item, publicId)).toList();
+        purgeExcessDeleted(board);
+        return new BatchMutationResult(revision, views, true);
+    }
+
+    @Transactional
+    public BatchMutationResult restoreObjects(User user, UUID publicId, UUID deleteOperationId,
+                                              List<VersionedObject> requested) {
+        Whiteboard board = locked(user, publicId);
+        if (requested == null || requested.isEmpty() || requested.size() > MAX_BATCH_OBJECTS)
+            throw new IllegalArgumentException("Некорректный список объектов");
+        List<WhiteboardObject> restored = new ArrayList<>();
+        Instant cutoff = Instant.now().minus(DELETED_RETENTION);
+        for (VersionedObject request : requested) {
+            WhiteboardObject item = objects.findByIdAndBoard(request.id(), board)
+                    .orElseThrow(() -> new UndoExpiredException());
+            if (!item.isDeleted() || item.getDeletedAt().isBefore(cutoff)) throw new UndoExpiredException();
+            if (item.getVersion() != request.expectedVersion()) throw new VersionConflictException(view(item, publicId));
+            item.restore(user, deleteOperationId);
+            restored.add(item);
+        }
+        long revision = board.nextRevision();
+        return new BatchMutationResult(revision, restored.stream().map(item -> view(item, publicId)).toList(), true);
+    }
+
+    @Transactional
+    public BatchMutationResult moveObjects(User user, UUID publicId, List<VersionedObject> requested,
+                                           double deltaX, double deltaY) {
+        requireCoordinate(deltaX); requireCoordinate(deltaY);
+        Whiteboard board = locked(user, publicId);
+        if (requested == null || requested.isEmpty() || requested.size() > MAX_BATCH_OBJECTS)
+            throw new IllegalArgumentException("За один раз можно переместить не более 500 объектов");
+        List<WhiteboardObject> changed = new ArrayList<>();
+        for (VersionedObject request : requested) {
+            WhiteboardObject item = objects.findByIdAndBoard(request.id(), board)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            if (item.isDeleted()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            if (item.getVersion() != request.expectedVersion()) throw new VersionConflictException(view(item, publicId));
+            ObjectNode data = (ObjectNode) parse(item.getData()).deepCopy();
+            double left = data.path("left").asDouble(0) + deltaX;
+            double top = data.path("top").asDouble(0) + deltaY;
+            requireCoordinate(left); requireCoordinate(top);
+            data.put("left", left); data.put("top", top);
+            validateObjectData(item.getType(), data);
+            item.update(json(data));
+            changed.add(item);
+        }
+        long revision = board.nextRevision();
+        return new BatchMutationResult(revision, changed.stream().map(item -> view(item, publicId)).toList(), true);
     }
 
     @Transactional
@@ -143,7 +263,7 @@ public class WhiteboardService {
         if (images.countByBoard(board) >= MAX_IMAGES) throw new IllegalArgumentException("На доске может быть не более 30 изображений");
         if (images.totalSizeByBoard(board) + file.getSize() > MAX_BOARD_IMAGE_SIZE)
             throw new IllegalArgumentException("Изображения на доске превышают общий лимит 150 МБ");
-        if (objects.countByBoard(board) >= MAX_OBJECTS) throw new IllegalArgumentException("На доске достигнут лимит объектов");
+        requireObjectCapacity(board);
         requireCoordinate(left); requireCoordinate(top);
 
         ProcessedImage processed = processImage(file);
@@ -185,6 +305,7 @@ public class WhiteboardService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (!image.getObject().getBoard().getId().equals(board.getId()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if (image.getObject().isDeleted()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         Path file = safePath(image.getStoredName());
         if (!Files.isRegularFile(file)) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         return new ImageDownload(image, new FileSystemResource(file));
@@ -250,6 +371,31 @@ public class WhiteboardService {
         if (count[0] > MAX_PATH_VALUES) throw new IllegalArgumentException("Штрих слишком большой");
     }
 
+    private void validateText(JsonNode data) {
+        if (data == null || !data.isObject()) throw new IllegalArgumentException("Некорректный текст");
+        String text = data.path("text").asText();
+        if (text.isBlank()) throw new IllegalArgumentException("Введите текст");
+        if (text.codePointCount(0, text.length()) > MAX_TEXT_LENGTH)
+            throw new IllegalArgumentException("Текст не может быть длиннее 2000 символов");
+        if (text.lines().count() > MAX_TEXT_LINES)
+            throw new IllegalArgumentException("В тексте может быть не более 50 строк");
+        String color = data.path("fill").asText();
+        if (!COLOR.matcher(color).matches()) throw new IllegalArgumentException("Некорректный цвет текста");
+        double fontSize = data.path("fontSize").asDouble(Double.NaN);
+        if (!Double.isFinite(fontSize) || fontSize < MIN_FONT_SIZE || fontSize > MAX_FONT_SIZE)
+            throw new IllegalArgumentException("Размер текста должен быть от 12 до 144 px");
+        requireCoordinate(data.path("left").asDouble(Double.NaN));
+        requireCoordinate(data.path("top").asDouble(Double.NaN));
+    }
+
+    private void validateObjectData(WhiteboardObjectType type, JsonNode data) {
+        switch (type) {
+            case PATH -> validatePath(data);
+            case IMAGE -> validateImageTransform(data);
+            case TEXT -> validateText(data);
+        }
+    }
+
     private void validateImageTransform(JsonNode data) {
         if (data == null || !data.isObject()) throw new IllegalArgumentException("Некорректное положение изображения");
         for (String key : List.of("left", "top", "width", "height", "scaleX", "scaleY", "angle")) {
@@ -279,6 +425,69 @@ public class WhiteboardService {
     private void requireCoordinate(double value) {
         if (!Double.isFinite(value) || Math.abs(value) > MAX_COORDINATE)
             throw new IllegalArgumentException("Некорректные координаты");
+    }
+
+    private void requireObjectCapacity(Whiteboard board) {
+        if (objects.countByBoardAndDeletedAtIsNull(board) >= MAX_OBJECTS)
+            throw new IllegalArgumentException("На доске достигнут лимит объектов");
+    }
+
+    private List<UUID> normalizedIds(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) throw new IllegalArgumentException("Выберите объекты");
+        List<UUID> result = ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (result.isEmpty() || result.size() > MAX_BATCH_OBJECTS)
+            throw new IllegalArgumentException("За один раз можно изменить не более 500 объектов");
+        return result;
+    }
+
+    private void purgeExcessDeleted(Whiteboard board) {
+        List<WhiteboardObject> deleted = objects.findTop600ByBoardAndDeletedAtIsNotNullOrderByDeletedAtAsc(board);
+        long deletedBytes = images.deletedSizeByBoard(board);
+        int removeCount = Math.toIntExact(Math.max(0,
+                objects.countByBoardAndDeletedAtIsNotNull(board) - MAX_DELETED_OBJECTS));
+        int index = 0;
+        while (index < deleted.size() && (index < removeCount || deletedBytes > MAX_DELETED_IMAGE_SIZE)) {
+            WhiteboardObject item = deleted.get(index++);
+            Optional<WhiteboardImage> image = images.findById(item.getId());
+            if (image.isPresent()) {
+                deletedBytes -= image.get().getSizeBytes();
+                String storedName = image.get().getStoredName();
+                images.delete(image.get());
+                images.flush();
+                deletePhysicalAfterCommit(List.of(storedName));
+            }
+            objects.delete(item);
+        }
+        if (index > 0) objects.flush();
+    }
+
+    private MutationResult duplicateCreate(Whiteboard board, UUID publicId, WhiteboardObject duplicate,
+                                           WhiteboardObjectType expectedType) {
+        if (!duplicate.getBoard().getId().equals(board.getId()) || duplicate.getType() != expectedType
+                || duplicate.isDeleted()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Идентификатор объекта уже используется");
+        }
+        return new MutationResult(board.getRevision(), view(duplicate, publicId), false);
+    }
+
+    @Scheduled(fixedDelayString = "${app.whiteboard.cleanup-delay-ms:600000}",
+            initialDelayString = "${app.whiteboard.cleanup-initial-delay-ms:60000}")
+    @Transactional
+    public void purgeExpiredDeletedObjects() {
+        Instant cutoff = Instant.now().minus(DELETED_RETENTION);
+        List<WhiteboardObject> expired = objects.findByDeletedAtBefore(cutoff);
+        if (expired.isEmpty()) return;
+        List<String> storedNames = new ArrayList<>();
+        for (WhiteboardObject item : expired) {
+            images.findById(item.getId()).ifPresent(image -> {
+                storedNames.add(image.getStoredName());
+                images.delete(image);
+            });
+            objects.delete(item);
+        }
+        images.flush();
+        objects.flush();
+        deletePhysicalAfterCommit(storedNames);
     }
 
     private ProcessedImage processImage(MultipartFile file) {
@@ -372,18 +581,27 @@ public class WhiteboardService {
         catch (RuntimeException ignored) { /* очистка недоступных файлов повторится при запуске */ }
     }
 
-    public record Snapshot(UUID boardId, long revision, Long lessonId, String studentName, List<ObjectView> objects) {}
+    public record Snapshot(UUID boardId, long revision, Long lessonId, String studentName, String displayName,
+                           List<ObjectView> objects) {}
     public record ObjectView(UUID id, WhiteboardObjectType type, JsonNode data, long zOrder, long version,
                              String authorName, String imageUrl) {}
     public record MutationResult(long revision, ObjectView object, boolean changed) {}
+    public record BatchMutationResult(long revision, List<ObjectView> objects, boolean changed) {}
+    public record VersionedObject(UUID id, long expectedVersion) {}
     public record DeleteResult(long revision, UUID objectId, boolean changed, String storedName) {}
     public record ClearResult(long revision) {}
     public record ImageDownload(WhiteboardImage image, Resource resource) {}
+    public record BoardMetadata(UUID boardId, Long lessonId, String displayName, Instant lessonStartAt,
+                                int durationMinutes) {}
     private record ProcessedImage(byte[] bytes, int width, int height, String extension, String contentType) {}
 
     public static class VersionConflictException extends RuntimeException {
         private final ObjectView current;
         public VersionConflictException(ObjectView current) { super("Объект уже изменён другим участником"); this.current = current; }
         public ObjectView getCurrent() { return current; }
+    }
+
+    public static class UndoExpiredException extends RuntimeException {
+        public UndoExpiredException() { super("Действие уже нельзя отменить"); }
     }
 }

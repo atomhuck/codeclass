@@ -36,6 +36,7 @@ import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -74,6 +75,7 @@ class WhiteboardIntegrationTest {
     @Autowired ConnectionRequestRepository requestRepository;
     @Autowired WhiteboardRepository whiteboardRepository;
     @Autowired WhiteboardObjectRepository whiteboardObjectRepository;
+    @Autowired WhiteboardNavigationService navigation;
     @LocalServerPort int port;
     private MockMvc mvc;
 
@@ -183,6 +185,67 @@ class WhiteboardIntegrationTest {
     }
 
     @Test
+    void supportsTextBatchMovementUndoableDeletionRenameAndRelatedHistory() throws Exception {
+        User teacher = accounts.requireByUsername("board_teacher");
+        User student = acceptedStudent(teacher, "board_v2");
+        Lesson lesson = lessons.create(teacher, student.getId(),
+                LocalDateTime.of(2025, 9, 3, 18, 0), 60);
+        Whiteboard board = whiteboards.getOrCreate(teacher, lesson);
+
+        UUID pathId = UUID.randomUUID();
+        var path = whiteboards.createPath(teacher, board.getPublicId(), pathId, validPath());
+        UUID textId = UUID.randomUUID();
+        var text = whiteboards.createText(student, board.getPublicId(), textId, validText());
+        assertThat(text.object().type()).isEqualTo(WhiteboardObjectType.TEXT);
+
+        var moved = whiteboards.moveObjects(teacher, board.getPublicId(), java.util.List.of(
+                new WhiteboardService.VersionedObject(pathId, path.object().version()),
+                new WhiteboardService.VersionedObject(textId, text.object().version())), 25, -15);
+        assertThat(moved.objects()).hasSize(2);
+        assertThat(moved.objects()).allMatch(item -> item.version() == 1);
+
+        MockMultipartFile image = new MockMultipartFile(
+                "file", "undo.png", "image/png", png(60, 40));
+        var uploaded = whiteboards.uploadImage(student, board.getPublicId(), image, 50, 60);
+        UUID deleteOperation = UUID.randomUUID();
+        var deleted = whiteboards.deleteObjects(student, board.getPublicId(), deleteOperation,
+                java.util.List.of(pathId, textId, uploaded.object().id()));
+        assertThat(deleted.objects()).hasSize(3);
+        assertThat(whiteboards.snapshot(teacher, board.getPublicId()).objects()).isEmpty();
+        assertThatThrownBy(() -> whiteboards.loadImage(student, board.getPublicId(), uploaded.object().id()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        var restored = whiteboards.restoreObjects(student, board.getPublicId(), deleteOperation,
+                deleted.objects().stream().map(item ->
+                        new WhiteboardService.VersionedObject(item.id(), item.version())).toList());
+        assertThat(restored.objects()).hasSize(3);
+        assertThat(whiteboards.snapshot(student, board.getPublicId()).objects()).hasSize(3);
+        assertThat(whiteboards.loadImage(student, board.getPublicId(), uploaded.object().id()).resource().exists()).isTrue();
+
+        long revisionBeforeRename = whiteboards.snapshot(teacher, board.getPublicId()).revision();
+        var renamed = whiteboards.rename(teacher, board.getPublicId(), "Разбор динамики");
+        assertThat(renamed.displayName()).isEqualTo("Разбор динамики");
+        assertThat(whiteboards.snapshot(student, board.getPublicId()).displayName()).isEqualTo("Разбор динамики");
+        assertThat(whiteboards.snapshot(teacher, board.getPublicId()).revision()).isEqualTo(revisionBeforeRename);
+        assertThatThrownBy(() -> whiteboards.rename(student, board.getPublicId(), "Чужое название"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        Lesson currentLesson = lessons.create(teacher, student.getId(),
+                LocalDateTime.of(2026, 9, 3, 18, 0), 60);
+        Whiteboard current = whiteboards.getOrCreate(student, currentLesson);
+        assertThatThrownBy(() -> whiteboards.createPath(teacher, current.getPublicId(), pathId, validPath()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(whiteboards.rename(teacher, board.getPublicId(), "  ").displayName())
+                .startsWith("Доска · ");
+        var related = navigation.related(student, current.getPublicId(), null, 20,
+                Instant.parse("2026-10-01T00:00:00Z"));
+        assertThat(related.items()).extracting(WhiteboardNavigationService.RelatedBoard::boardId)
+                .contains(board.getPublicId());
+        lessons.delete(teacher, currentLesson.getId());
+        lessons.delete(teacher, lesson.getId());
+    }
+
+    @Test
     void twoAuthenticatedWebSocketParticipantsReceiveSavedStroke() throws Exception {
         User teacher = accounts.requireByUsername("board_teacher");
         User student = acceptedStudent(teacher, "board_realtime");
@@ -218,6 +281,49 @@ class WhiteboardIntegrationTest {
         assertThat(whiteboards.snapshot(teacher, board.getPublicId()).objects())
                 .extracting(WhiteboardService.ObjectView::id).contains(objectId);
 
+        UUID textId = UUID.randomUUID();
+        UUID textOperationId = UUID.randomUUID();
+        ObjectNode textEvent = objectMapper.createObjectNode();
+        textEvent.put("type", "text.commit");
+        textEvent.put("operationId", textOperationId.toString());
+        textEvent.put("objectId", textId.toString());
+        textEvent.set("data", validText());
+        teacherSocket.sendText(objectMapper.writeValueAsString(textEvent), true).get(5, TimeUnit.SECONDS);
+        assertThat(studentMessages.awaitContaining(textOperationId.toString(), 5)).contains("object.created");
+
+        UUID moveOperationId = UUID.randomUUID();
+        ObjectNode moveEvent = objectMapper.createObjectNode();
+        moveEvent.put("type", "objects.move");
+        moveEvent.put("operationId", moveOperationId.toString());
+        moveEvent.put("deltaX", 12);
+        moveEvent.put("deltaY", -8);
+        ArrayNode movedObjects = moveEvent.putArray("objects");
+        movedObjects.addObject().put("id", objectId.toString()).put("expectedVersion", 0);
+        movedObjects.addObject().put("id", textId.toString()).put("expectedVersion", 0);
+        studentSocket.sendText(objectMapper.writeValueAsString(moveEvent), true).get(5, TimeUnit.SECONDS);
+        assertThat(teacherMessages.awaitContaining(moveOperationId.toString(), 5)).contains("objects.updated");
+
+        UUID deleteOperationId = UUID.randomUUID();
+        ObjectNode deleteEvent = objectMapper.createObjectNode();
+        deleteEvent.put("type", "objects.delete");
+        deleteEvent.put("operationId", deleteOperationId.toString());
+        deleteEvent.putArray("objectIds").add(objectId.toString()).add(textId.toString());
+        studentSocket.sendText(objectMapper.writeValueAsString(deleteEvent), true).get(5, TimeUnit.SECONDS);
+        assertThat(teacherMessages.awaitContaining(deleteOperationId.toString(), 5)).contains("objects.deleted");
+        assertThat(whiteboards.snapshot(teacher, board.getPublicId()).objects()).isEmpty();
+
+        UUID restoreOperationId = UUID.randomUUID();
+        ObjectNode restoreEvent = objectMapper.createObjectNode();
+        restoreEvent.put("type", "objects.restore");
+        restoreEvent.put("operationId", restoreOperationId.toString());
+        restoreEvent.put("deleteOperationId", deleteOperationId.toString());
+        ArrayNode restoredObjects = restoreEvent.putArray("objects");
+        restoredObjects.addObject().put("id", objectId.toString()).put("expectedVersion", 2);
+        restoredObjects.addObject().put("id", textId.toString()).put("expectedVersion", 2);
+        studentSocket.sendText(objectMapper.writeValueAsString(restoreEvent), true).get(5, TimeUnit.SECONDS);
+        assertThat(teacherMessages.awaitContaining(restoreOperationId.toString(), 5)).contains("objects.restored");
+        assertThat(whiteboards.snapshot(teacher, board.getPublicId()).objects()).hasSize(2);
+
         studentSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done").get(5, TimeUnit.SECONDS);
         teacherSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done").get(5, TimeUnit.SECONDS);
         lessons.delete(teacher, lesson.getId());
@@ -241,6 +347,16 @@ class WhiteboardIntegrationTest {
         commands.addArray().add("M").add(0).add(0);
         commands.addArray().add("L").add(50).add(25);
         return path;
+    }
+
+    private ObjectNode validText() {
+        ObjectNode text = objectMapper.createObjectNode();
+        text.put("text", "Пример текста");
+        text.put("left", 30);
+        text.put("top", 40);
+        text.put("fontSize", 28);
+        text.put("fill", "#4F46E5");
+        return text;
     }
 
     private byte[] png(int width, int height) throws Exception {

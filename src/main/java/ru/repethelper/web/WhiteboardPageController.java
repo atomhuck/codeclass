@@ -33,6 +33,7 @@ public class WhiteboardPageController {
         model.addAttribute("user", user);
         model.addAttribute("board", board);
         model.addAttribute("lesson", board.getLesson());
+        model.addAttribute("boardDisplayName", boards.displayName(board));
         return "whiteboard";
     }
 }

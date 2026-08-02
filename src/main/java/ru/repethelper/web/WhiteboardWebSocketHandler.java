@@ -44,6 +44,9 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
         session.getAttributes().put("displayName", user.getDisplayName());
         session.getAttributes().put("userId", user.getId());
         hub.join(boardId, session);
+        ObjectNode self = base("presence.self", session, user);
+        self.put("participants", hub.participantCount(boardId));
+        hub.send(boardId, session.getId(), self);
         ObjectNode event = base("presence.join", session, user);
         event.put("participants", hub.participantCount(boardId));
         hub.broadcast(boardId, event, null);
@@ -64,7 +67,12 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
         try { incoming = mapper.readTree(message.getPayload()); }
         catch (JacksonException ex) { error(session, "Некорректное сообщение"); return; }
         String type = incoming.path("type").asText();
+        UUID operationId = null;
         try {
+            if (Set.of("stroke.commit", "text.commit", "object.update", "object.delete", "objects.move",
+                    "objects.delete", "objects.restore", "board.clear").contains(type)) {
+                operationId = UUID.fromString(incoming.path("operationId").asText());
+            }
             switch (type) {
                 case "cursor.move", "stroke.begin", "stroke.points" -> {
                     validateEphemeral(type, incoming);
@@ -73,43 +81,73 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
                 case "stroke.commit" -> {
                     UUID objectId = UUID.fromString(incoming.path("objectId").asText());
                     var result = boards.createPath(user, boardId, objectId, incoming.path("data"));
-                    if (result.changed()) hub.broadcast(boardId, objectEvent("object.created", result), null);
-                    else hub.send(boardId, session.getId(), objectEvent("object.created", result));
+                    if (result.changed()) hub.broadcast(boardId, objectEvent("object.created", result, operationId, session), null);
+                    else hub.send(boardId, session.getId(), objectEvent("object.created", result, operationId, session));
+                }
+                case "text.commit" -> {
+                    UUID objectId = UUID.fromString(incoming.path("objectId").asText());
+                    var result = boards.createText(user, boardId, objectId, incoming.path("data"));
+                    if (result.changed()) hub.broadcast(boardId, objectEvent("object.created", result, operationId, session), null);
+                    else hub.send(boardId, session.getId(), objectEvent("object.created", result, operationId, session));
                 }
                 case "object.update" -> {
                     UUID objectId = UUID.fromString(incoming.path("objectId").asText());
                     long version = incoming.path("expectedVersion").asLong(-1);
                     var result = boards.updateObject(user, boardId, objectId, version, incoming.path("data"));
-                    hub.broadcast(boardId, objectEvent("object.updated", result), null);
+                    hub.broadcast(boardId, objectEvent("object.updated", result, operationId, session), null);
                 }
                 case "object.delete" -> {
                     UUID objectId = UUID.fromString(incoming.path("objectId").asText());
-                    var result = boards.deleteObject(user, boardId, objectId);
+                    var result = boards.deleteObject(user, boardId, objectId, operationId);
                     if (result.changed()) {
                         ObjectNode event = mapper.createObjectNode();
                         event.put("type", "object.deleted"); event.put("revision", result.revision());
                         event.put("objectId", result.objectId().toString());
+                        operation(event, operationId, session);
                         hub.broadcast(boardId, event, null);
                     }
+                }
+                case "objects.move" -> {
+                    var result = boards.moveObjects(user, boardId, versioned(incoming.path("objects")),
+                            incoming.path("deltaX").asDouble(Double.NaN),
+                            incoming.path("deltaY").asDouble(Double.NaN));
+                    hub.broadcast(boardId, batchEvent("objects.updated", result, operationId, session), null);
+                }
+                case "objects.delete" -> {
+                    var result = boards.deleteObjects(user, boardId, operationId, ids(incoming.path("objectIds")));
+                    if (result.changed()) hub.broadcast(boardId,
+                            batchEvent("objects.deleted", result, operationId, session), null);
+                }
+                case "objects.restore" -> {
+                    UUID deleteOperationId = UUID.fromString(incoming.path("deleteOperationId").asText());
+                    var result = boards.restoreObjects(user, boardId, deleteOperationId,
+                            versioned(incoming.path("objects")));
+                    hub.broadcast(boardId, batchEvent("objects.restored", result, operationId, session), null);
                 }
                 case "board.clear" -> {
                     var result = boards.clear(user, boardId);
                     ObjectNode event = mapper.createObjectNode();
                     event.put("type", "board.cleared"); event.put("revision", result.revision());
+                    operation(event, operationId, session);
                     hub.broadcast(boardId, event, null);
                 }
                 default -> error(session, "Неизвестный тип события");
             }
         } catch (WhiteboardService.VersionConflictException ex) {
             ObjectNode event = mapper.createObjectNode();
-            event.put("type", "sync.required");
+            event.put("type", "sync.required"); event.put("code", "VERSION_CONFLICT");
+            if (operationId != null) event.put("operationId", operationId.toString());
             event.set("object", mapper.valueToTree(ex.getCurrent()));
             hub.send(boardId, session.getId(), event);
+        } catch (WhiteboardService.UndoExpiredException ex) {
+            error(session, "UNDO_EXPIRED", ex.getMessage(), operationId);
         } catch (IllegalArgumentException ex) {
-            error(session, ex.getMessage());
+            String code = ex.getMessage() != null && ex.getMessage().toLowerCase(Locale.ROOT).contains("координат")
+                    ? "COORDINATES_OUT_OF_RANGE" : "INVALID_OPERATION";
+            error(session, code, ex.getMessage(), operationId);
         } catch (ResponseStatusException ex) {
             if (ex.getStatusCode() == HttpStatus.FORBIDDEN) session.close(CloseStatus.POLICY_VIOLATION);
-            else error(session, "Объект не найден");
+            else error(session, "NOT_FOUND", "Объект не найден", operationId);
         }
     }
 
@@ -154,11 +192,46 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
             throw new IllegalArgumentException("Некорректные координаты");
     }
 
-    private ObjectNode objectEvent(String type, WhiteboardService.MutationResult result) {
+    private ObjectNode objectEvent(String type, WhiteboardService.MutationResult result,
+                                   UUID operationId, WebSocketSession session) {
         ObjectNode event = mapper.createObjectNode();
         event.put("type", type); event.put("revision", result.revision());
         event.set("object", mapper.valueToTree(result.object()));
+        operation(event, operationId, session);
         return event;
+    }
+
+    private ObjectNode batchEvent(String type, WhiteboardService.BatchMutationResult result,
+                                  UUID operationId, WebSocketSession session) {
+        ObjectNode event = mapper.createObjectNode();
+        event.put("type", type); event.put("revision", result.revision());
+        event.set("objects", mapper.valueToTree(result.objects()));
+        operation(event, operationId, session);
+        return event;
+    }
+
+    private void operation(ObjectNode event, UUID operationId, WebSocketSession session) {
+        if (operationId != null) event.put("operationId", operationId.toString());
+        event.put("actorSessionId", session.getId());
+    }
+
+    private List<WhiteboardService.VersionedObject> versioned(JsonNode value) {
+        if (!value.isArray() || value.isEmpty() || value.size() > WhiteboardService.MAX_BATCH_OBJECTS)
+            throw new IllegalArgumentException("Некорректный список объектов");
+        List<WhiteboardService.VersionedObject> result = new ArrayList<>();
+        for (JsonNode item : value) {
+            result.add(new WhiteboardService.VersionedObject(
+                    UUID.fromString(item.path("id").asText()), item.path("expectedVersion").asLong(-1)));
+        }
+        return result;
+    }
+
+    private List<UUID> ids(JsonNode value) {
+        if (!value.isArray() || value.isEmpty() || value.size() > WhiteboardService.MAX_BATCH_OBJECTS)
+            throw new IllegalArgumentException("Некорректный список объектов");
+        List<UUID> result = new ArrayList<>();
+        value.forEach(item -> result.add(UUID.fromString(item.asText())));
+        return result;
     }
 
     private ObjectNode base(String type, WebSocketSession session, User user) {
@@ -169,8 +242,13 @@ public class WhiteboardWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void error(WebSocketSession session, String message) throws IOException {
+        error(session, "INVALID_MESSAGE", message, null);
+    }
+
+    private void error(WebSocketSession session, String code, String message, UUID operationId) throws IOException {
         ObjectNode event = mapper.createObjectNode();
-        event.put("type", "error"); event.put("message", message);
+        event.put("type", "operation.rejected"); event.put("code", code); event.put("message", message);
+        if (operationId != null) event.put("operationId", operationId.toString());
         hub.send(boardId(session), session.getId(), event);
     }
 

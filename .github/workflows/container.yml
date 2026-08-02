@@ -20,6 +20,11 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run whiteboard frontend tests
+        run: node --test src/test/js/*.test.js
       - name: Run tests
         run: mvn -B test
       - name: Show test reports on failure

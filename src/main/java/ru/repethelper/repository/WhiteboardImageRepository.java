@@ -13,11 +13,14 @@ public interface WhiteboardImageRepository extends JpaRepository<WhiteboardImage
     @Query("select i from WhiteboardImage i where i.object.board = :board")
     List<WhiteboardImage> findByBoard(@Param("board") Whiteboard board);
 
-    @Query("select count(i) from WhiteboardImage i where i.object.board = :board")
+    @Query("select count(i) from WhiteboardImage i where i.object.board = :board and i.object.deletedAt is null")
     long countByBoard(@Param("board") Whiteboard board);
 
-    @Query("select coalesce(sum(i.sizeBytes), 0) from WhiteboardImage i where i.object.board = :board")
+    @Query("select coalesce(sum(i.sizeBytes), 0) from WhiteboardImage i where i.object.board = :board and i.object.deletedAt is null")
     long totalSizeByBoard(@Param("board") Whiteboard board);
+
+    @Query("select coalesce(sum(i.sizeBytes), 0) from WhiteboardImage i where i.object.board = :board and i.object.deletedAt is not null")
+    long deletedSizeByBoard(@Param("board") Whiteboard board);
 
     @Query("select i from WhiteboardImage i where i.object.board.lesson in :lessons")
     List<WhiteboardImage> findByLessons(@Param("lessons") Collection<Lesson> lessons);
