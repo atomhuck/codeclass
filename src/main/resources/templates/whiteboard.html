@@ -10,7 +10,7 @@
     <title th:text="${boardDisplayName + ' — RepetHelper'}">Доска занятия — RepetHelper</title>
     <link rel="icon" type="image/svg+xml" th:href="@{/brand/repethelper-mark.svg}">
     <script th:src="@{/js/theme.js(v=3)}"></script>
-    <link rel="stylesheet" th:href="@{/css/whiteboard.css(v=3)}">
+    <link rel="stylesheet" th:href="@{/css/whiteboard.css(v=4)}">
 </head>
 <body>
 <main id="whiteboard-app" class="whiteboard-app is-offline"
@@ -132,8 +132,8 @@
     <button th:if="${user.role.name() == 'TEACHER'}" class="desktop-clear desktop-only" type="button" data-clear-board>Очистить доску</button>
     <div class="board-hint desktop-only">P — карандаш · V — выбор · E — ластик · T — текст · H — рука · Space + drag — перемещение</div>
 </main>
-<script th:src="@{/vendor/fabric-7.4.0.min.js(v=3)}"></script>
-<script th:src="@{/js/whiteboard-core.js(v=3)}"></script>
-<script th:src="@{/js/whiteboard.js(v=3)}"></script>
+<script th:src="@{/vendor/fabric-7.4.0.min.js(v=4)}"></script>
+<script th:src="@{/js/whiteboard-core.js(v=4)}"></script>
+<script th:src="@{/js/whiteboard.js(v=4)}"></script>
 </body>
 </html>
