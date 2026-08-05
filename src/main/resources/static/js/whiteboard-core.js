@@ -72,5 +72,20 @@
     canRedo() { return this.redoStack.length > 0; }
   }
 
-  window.RepetHelperBoardCore = { clamp, finitePoint, clampViewport, simplifyPoints, ActionHistory };
+  class OperationGate {
+    constructor() { this.busy = false; }
+    isBusy() { return this.busy; }
+    async run(operation) {
+      if (this.busy) return false;
+      this.busy = true;
+      try {
+        await operation();
+        return true;
+      } finally {
+        this.busy = false;
+      }
+    }
+  }
+
+  window.RepetHelperBoardCore = { clamp, finitePoint, clampViewport, simplifyPoints, ActionHistory, OperationGate };
 })();

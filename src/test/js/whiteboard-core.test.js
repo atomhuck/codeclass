@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 global.window = {};
 require("../../main/resources/static/js/whiteboard-core.js");
-const { clampViewport, finitePoint, simplifyPoints, ActionHistory } = window.RepetHelperBoardCore;
+const { clampViewport, finitePoint, simplifyPoints, ActionHistory, OperationGate } = window.RepetHelperBoardCore;
 
 test("viewport stays inside the logical workspace at every zoom", () => {
   const bounds = { minX: -50_000, maxX: 50_000, minY: -50_000, maxY: 50_000 };
@@ -41,4 +41,17 @@ test("history respects limits and clears redo on a new action", () => {
   assert.equal(history.canRedo(), false);
   history.clear();
   assert.equal(history.canUndo(), false);
+});
+
+test("operation gate prevents concurrent undo and redo requests", async () => {
+  const gate = new OperationGate();
+  let release;
+  const first = gate.run(() => new Promise(resolve => { release = resolve; }));
+  assert.equal(gate.isBusy(), true);
+  const second = await gate.run(async () => assert.fail("concurrent operation must not run"));
+  assert.equal(second, false);
+  release();
+  assert.equal(await first, true);
+  assert.equal(gate.isBusy(), false);
+  assert.equal(await gate.run(async () => {}), true);
 });

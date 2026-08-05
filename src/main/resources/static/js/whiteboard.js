@@ -18,6 +18,8 @@
   const pendingOperations = new Map();
   const pendingDeletes = new Set();
   const history = new core.ActionHistory(100, 8 * 1024 * 1024);
+  const historyGate = new core.OperationGate();
+  const activeToasts = new Map();
   const cursorColors = ["#45D8FF", "#FFD66B", "#FF6B7A", "#A98CFF", "#64F5A6"];
   const BASE_BOUND = 50_000;
   const SAFE_COORDINATE = 900_000;
@@ -83,11 +85,19 @@
   }
 
   function showToast(message, success = false) {
+    const key = `${success ? "success" : "error"}:${message}`;
+    const existing = activeToasts.get(key);
+    if (existing?.isConnected) {
+      existing.classList.remove("repeated");
+      requestAnimationFrame(() => existing.classList.add("repeated"));
+      return;
+    }
     const toast = document.createElement("div");
     toast.className = `toast${success ? " success" : ""}`;
     toast.textContent = message;
     document.getElementById("toast-stack").append(toast);
-    setTimeout(() => toast.remove(), 4200);
+    activeToasts.set(key, toast);
+    setTimeout(() => { toast.remove(); activeToasts.delete(key); }, 4200);
   }
 
   function queueBoardTask(task) {
@@ -106,8 +116,15 @@
   }
 
   function updateHistoryButtons() {
-    document.querySelectorAll("[data-undo]").forEach(button => button.disabled = !connected || !history.canUndo());
-    document.querySelectorAll("[data-redo]").forEach(button => button.disabled = !connected || !history.canRedo());
+    const busy = historyGate.isBusy();
+    document.querySelectorAll("[data-undo]").forEach(button => {
+      button.disabled = !connected || busy || !history.canUndo();
+      button.setAttribute("aria-busy", String(busy));
+    });
+    document.querySelectorAll("[data-redo]").forEach(button => {
+      button.disabled = !connected || busy || !history.canRedo();
+      button.setAttribute("aria-busy", String(busy));
+    });
   }
 
   function send(payload) {
@@ -268,14 +285,20 @@
     if (message.type === "operation.rejected" || message.type === "error") {
       const error = new Error(message.message || "Действие отклонено сервером");
       error.code = message.code;
+      const hasPendingOperation = Boolean(message.operationId && pendingOperations.has(message.operationId));
       settleOperation(message, error);
       if (message.code === "COORDINATES_OUT_OF_RANGE") recoverCoordinates();
-      showToast(error.message);
+      if (!hasPendingOperation) showToast(error.message);
       return;
     }
     if (message.type === "sync.required") {
       const error = new Error("Объект уже изменён другим участником"); error.code = message.code;
-      settleOperation(message, error); await loadSnapshot(); showToast(error.message); return;
+      const hasPendingOperation = Boolean(message.operationId && pendingOperations.has(message.operationId));
+      await loadSnapshot();
+      error.snapshotSynchronized = true;
+      settleOperation(message, error);
+      if (!hasPendingOperation) showToast(error.message);
+      return;
     }
     switch (message.type) {
       case "presence.self": selfSessionId = message.sessionId; updateParticipants(message.participants); break;
@@ -679,8 +702,28 @@
   }
   function normalizeHistoryAction(action){if(action.kind==="visibility"&&action.initialActive===undefined)action.initialActive=action.active;return action}
   const originalPush=history.push.bind(history);history.push=action=>originalPush(normalizeHistoryAction(action));
-  async function undo(){const entry=history.takeUndo();if(!entry)return;updateHistoryButtons();try{await executeHistoryAction(entry.action,false);history.commitUndo(entry)}catch(error){history.rollbackUndo(entry);showToast(error.message);if(error.code!=="UNDO_EXPIRED")await loadSnapshot()}updateHistoryButtons()}
-  async function redo(){const entry=history.takeRedo();if(!entry)return;updateHistoryButtons();try{await executeHistoryAction(entry.action,true);history.commitRedo(entry)}catch(error){history.rollbackRedo(entry);showToast(error.message);if(error.code!=="UNDO_EXPIRED")await loadSnapshot()}updateHistoryButtons()}
+  function isHistoryConflict(error){return error?.code==="VERSION_CONFLICT"||error?.code==="UNDO_EXPIRED"}
+  async function runHistory(direction){
+    const executed=await historyGate.run(async()=>{
+      updateHistoryButtons();
+      const undoing=direction==="undo";
+      const entry=undoing?history.takeUndo():history.takeRedo();
+      if(!entry)return;
+      try{
+        await executeHistoryAction(entry.action,!undoing);
+        undoing?history.commitUndo(entry):history.commitRedo(entry);
+      }catch(error){
+        if(isHistoryConflict(error))history.clear();
+        else undoing?history.rollbackUndo(entry):history.rollbackRedo(entry);
+        showToast(error.message);
+        if(!error.snapshotSynchronized&&error.code!=="UNDO_EXPIRED")await loadSnapshot();
+      }
+    });
+    updateHistoryButtons();
+    return executed;
+  }
+  const undo=()=>runHistory("undo");
+  const redo=()=>runHistory("redo");
   document.querySelectorAll("[data-undo]").forEach(button=>button.addEventListener("click",undo));document.querySelectorAll("[data-redo]").forEach(button=>button.addEventListener("click",redo));
 
   function setZoom(next,point=new fabric.Point(canvas.getWidth()/2,canvas.getHeight()/2)){const zoom=core.clamp(next,.1,8);canvas.zoomToPoint(point,zoom);clampCurrentViewport();document.querySelectorAll(".zoom-value").forEach(item=>item.textContent=`${Math.round(zoom*100)}%`);canvas.requestRenderAll()}
