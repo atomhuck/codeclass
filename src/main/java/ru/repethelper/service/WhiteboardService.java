@@ -39,6 +39,7 @@ public class WhiteboardService {
     public static final long MAX_DELETED_IMAGE_SIZE = 150L * 1024 * 1024;
     public static final int MAX_TEXT_LENGTH = 2_000;
     public static final int MAX_TEXT_LINES = 50;
+    public static final int MAX_TEXT_STYLE_ENTRIES = 2_000;
     public static final int MIN_FONT_SIZE = 12;
     public static final int MAX_FONT_SIZE = 144;
     public static final java.time.Duration DELETED_RETENTION = java.time.Duration.ofHours(2);
@@ -384,8 +385,50 @@ public class WhiteboardService {
         double fontSize = data.path("fontSize").asDouble(Double.NaN);
         if (!Double.isFinite(fontSize) || fontSize < MIN_FONT_SIZE || fontSize > MAX_FONT_SIZE)
             throw new IllegalArgumentException("Размер текста должен быть от 12 до 144 px");
+        validateTextStyles(data.path("styles"), text);
         requireCoordinate(data.path("left").asDouble(Double.NaN));
         requireCoordinate(data.path("top").asDouble(Double.NaN));
+    }
+
+    private void validateTextStyles(JsonNode styles, String text) {
+        if (styles == null || styles.isMissingNode() || styles.isNull()) return;
+        if (!styles.isObject()) throw new IllegalArgumentException("Некорректное форматирование текста");
+        String[] lines = text.split("\\R", -1);
+        int entries = 0;
+        Iterator<Map.Entry<String, JsonNode>> lineFields = styles.properties().iterator();
+        while (lineFields.hasNext()) {
+            Map.Entry<String, JsonNode> lineEntry = lineFields.next();
+            int line = numericStyleIndex(lineEntry.getKey());
+            if (line < 0 || line >= lines.length || !lineEntry.getValue().isObject())
+                throw new IllegalArgumentException("Некорректное форматирование текста");
+            Iterator<Map.Entry<String, JsonNode>> characterFields = lineEntry.getValue().properties().iterator();
+            while (characterFields.hasNext()) {
+                Map.Entry<String, JsonNode> characterEntry = characterFields.next();
+                int character = numericStyleIndex(characterEntry.getKey());
+                JsonNode style = characterEntry.getValue();
+                if (character < 0 || character >= lines[line].length() || !style.isObject())
+                    throw new IllegalArgumentException("Некорректное форматирование текста");
+                Iterator<Map.Entry<String, JsonNode>> properties = style.properties().iterator();
+                if (!properties.hasNext()) throw new IllegalArgumentException("Некорректное форматирование текста");
+                while (properties.hasNext()) {
+                    Map.Entry<String, JsonNode> property = properties.next();
+                    if (!"fontSize".equals(property.getKey()))
+                        throw new IllegalArgumentException("Разрешено менять только размер фрагмента текста");
+                    double size = property.getValue().asDouble(Double.NaN);
+                    if (!Double.isFinite(size) || size < MIN_FONT_SIZE || size > MAX_FONT_SIZE)
+                        throw new IllegalArgumentException("Размер текста должен быть от 12 до 144 px");
+                }
+                if (++entries > MAX_TEXT_STYLE_ENTRIES)
+                    throw new IllegalArgumentException("Слишком много форматированных символов");
+            }
+        }
+    }
+
+    private int numericStyleIndex(String value) {
+        if (value == null || value.isBlank() || value.length() > 6) return -1;
+        for (int i = 0; i < value.length(); i++) if (!Character.isDigit(value.charAt(i))) return -1;
+        try { return Integer.parseInt(value); }
+        catch (NumberFormatException ex) { return -1; }
     }
 
     private void validateObjectData(WhiteboardObjectType type, JsonNode data) {

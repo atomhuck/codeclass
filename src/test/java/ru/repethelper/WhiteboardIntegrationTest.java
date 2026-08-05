@@ -195,8 +195,17 @@ class WhiteboardIntegrationTest {
         UUID pathId = UUID.randomUUID();
         var path = whiteboards.createPath(teacher, board.getPublicId(), pathId, validPath());
         UUID textId = UUID.randomUUID();
-        var text = whiteboards.createText(student, board.getPublicId(), textId, validText());
+        ObjectNode styledText = validText();
+        styledText.putObject("styles").putObject("0").putObject("0").put("fontSize", 44);
+        var text = whiteboards.createText(student, board.getPublicId(), textId, styledText);
         assertThat(text.object().type()).isEqualTo(WhiteboardObjectType.TEXT);
+        assertThat(text.object().data().path("styles").path("0").path("0").path("fontSize").asInt()).isEqualTo(44);
+
+        ObjectNode unsafeText = validText();
+        unsafeText.putObject("styles").putObject("0").putObject("0").put("fontFamily", "external-font");
+        assertThatThrownBy(() -> whiteboards.createText(student, board.getPublicId(), UUID.randomUUID(), unsafeText))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("только размер");
 
         var moved = whiteboards.moveObjects(teacher, board.getPublicId(), java.util.List.of(
                 new WhiteboardService.VersionedObject(pathId, path.object().version()),

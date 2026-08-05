@@ -38,6 +38,10 @@
   let spacePressed = false;
   let panning = false;
   let panLast = null;
+  let panPointerId = null;
+  let pendingTextPoint = null;
+  let preservedTextSelection = null;
+  const textSaveTimers = new WeakMap();
   let draftStrokeId = null;
   let draftPoints = [];
   let pendingPreviewPoints = [];
@@ -313,7 +317,7 @@
     document.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("active", button.dataset.tool === currentTool));
     document.querySelectorAll("[data-context]").forEach(panel => panel.hidden = panel.dataset.context !== currentTool);
     document.querySelectorAll(".desktop-toolbar .size-control:not(.text-size-control)").forEach(item => item.hidden = currentTool === "text");
-    document.querySelectorAll(".desktop-toolbar .text-size-control").forEach(item => item.hidden = currentTool !== "text");
+    refreshTextSizeControls();
     canvas.requestRenderAll(); updateHistoryButtons();
   }
 
@@ -326,13 +330,99 @@
     document.querySelectorAll("[data-brush-size-value]").forEach(item => item.textContent = `${brushWidth} px`);
     canvas.freeDrawingBrush.width = brushWidth;
   }));
-  document.querySelectorAll("[data-font-size]").forEach(input => input.addEventListener("input", event => {
-    fontSize = Number(event.target.value);
-    document.querySelectorAll("[data-font-size]").forEach(item => item.value = fontSize);
-    document.querySelectorAll("[data-font-size-value]").forEach(item => item.textContent = `${fontSize} px`);
-    const active = canvas.getActiveObject();
-    if (active?.__boardType === "TEXT" && !active.isEditing) updateExistingTextSize(active, fontSize);
-  }));
+  document.querySelectorAll("[data-font-size]").forEach(input => {
+    input.addEventListener("pointerdown", preserveCurrentTextSelection);
+    input.addEventListener("input", event => previewSelectedTextSize(Number(event.target.value)));
+    input.addEventListener("change", commitSelectedTextSize);
+    input.addEventListener("pointercancel", commitSelectedTextSize);
+    input.addEventListener("blur", commitSelectedTextSize);
+  });
+
+  function textObjectsInSelection() {
+    return activeObjects().filter(object => object?.__boardType === "TEXT" || object?.__draftText);
+  }
+
+  function preserveCurrentTextSelection() {
+    const text = textObjectsInSelection()[0];
+    if (!text) return;
+    clearScheduledTextSave(text);
+    text.__fontControlActive = true;
+    if (!text.__textBefore && text.__boardId) text.__textBefore = serializeObject(text);
+    preservedTextSelection = {
+      object: text,
+      start: Number(text.selectionStart) || 0,
+      end: Number(text.selectionEnd) || 0,
+      before: text.__textBefore || serializeObject(text)
+    };
+  }
+
+  function syncFontSizeInputs(size) {
+    document.querySelectorAll("[data-font-size]").forEach(item => item.value = size);
+    document.querySelectorAll("[data-font-size-value]").forEach(item => item.textContent = `${size} px`);
+  }
+
+  function previewSelectedTextSize(size) {
+    if (!Number.isFinite(size)) return;
+    fontSize = Math.max(12, Math.min(144, size));
+    syncFontSizeInputs(fontSize);
+    const selected = textObjectsInSelection();
+    const targets = selected.length ? selected : preservedTextSelection?.object ? [preservedTextSelection.object] : [];
+    targets.forEach(text => {
+      if (!text.__textBefore && text.__boardId) text.__textBefore = serializeObject(text);
+      const remembered = preservedTextSelection?.object === text ? preservedTextSelection : null;
+      const start = text.isEditing ? Number(text.selectionStart) || 0 : remembered?.start ?? 0;
+      const end = text.isEditing ? Number(text.selectionEnd) || 0 : remembered?.end ?? 0;
+      if (start < end && typeof text.setSelectionStyles === "function") {
+        text.setSelectionStyles({ fontSize }, start, end);
+      } else if (text.isEditing && typeof text.setSelectionStyles === "function") {
+        text.setSelectionStyles({ fontSize });
+      } else {
+        text.set({ fontSize, styles: withoutFontSizeStyles(text.styles) });
+      }
+      text.__fontSizeDirty = true;
+      text.setCoords();
+    });
+    canvas.requestRenderAll();
+  }
+
+  async function commitSelectedTextSize() {
+    const remembered = preservedTextSelection;
+    const selected = textObjectsInSelection();
+    const targets = selected.length ? selected : remembered?.object ? [remembered.object] : [];
+    preservedTextSelection = null;
+    for (const text of targets) {
+      text.__fontControlActive = false;
+      if (!text.__fontSizeDirty) continue;
+      text.__fontSizeDirty = false;
+      if (text.isEditing || text.__draftText) continue;
+      clearScheduledTextSave(text);
+      await updateExistingTextSize(text, text.__textBefore || (remembered?.object === text ? remembered.before : serializeObject(text)));
+      text.__textBefore = null;
+    }
+    refreshTextSizeControls();
+  }
+
+  function withoutFontSizeStyles(styles) {
+    const result = {};
+    Object.entries(styles || {}).forEach(([line, characters]) => {
+      const lineResult = {};
+      Object.entries(characters || {}).forEach(([character, style]) => {
+        const next = { ...(style || {}) };
+        delete next.fontSize;
+        if (Object.keys(next).length) lineResult[character] = next;
+      });
+      if (Object.keys(lineResult).length) result[line] = lineResult;
+    });
+    return result;
+  }
+
+  function refreshTextSizeControls() {
+    const hasSelectedText = textObjectsInSelection().length > 0;
+    document.querySelectorAll(".desktop-toolbar .text-size-control")
+      .forEach(item => item.hidden = currentTool !== "text" && !hasSelectedText);
+    document.querySelectorAll("[data-selected-text-size]").forEach(item => item.hidden = !hasSelectedText);
+    document.querySelectorAll('[data-context="select"] .upload-button').forEach(item => item.hidden = hasSelectedText);
+  }
 
   document.querySelectorAll("[data-color]").forEach(button => button.addEventListener("click", () => setColor(button.dataset.color)));
   document.querySelectorAll("[data-color-input]").forEach(input => input.addEventListener("input", event => setColor(event.target.value)));
@@ -351,7 +441,7 @@
 
   function recoverCoordinates() {
     draftStrokeId = null; draftPoints = []; pendingPreviewPoints = []; clearTimeout(previewTimer); previewTimer = null;
-    eraserDragging = false; eraserLastPoint = null; restorePendingEraser(); panning = false; panLast = null;
+    eraserDragging = false; eraserLastPoint = null; restorePendingEraser(); panning = false; panLast = null; panPointerId = null; pendingTextPoint = null;
     clampCurrentViewport(); applyTool();
   }
 
@@ -381,9 +471,9 @@
   canvas.on("mouse:down", opt => {
     if (!connected) return;
     const event = opt.e;
-    if (currentTool === "text" && !spacePressed) { const point = safeScenePoint(event); if (point) createTextDraft(point); return; }
     const hand = currentTool === "hand" || spacePressed || event.button === 1;
-    if (hand) { panning = true; canvas.isDrawingMode = false; canvas.defaultCursor = "grabbing"; panLast = { x: event.clientX, y: event.clientY }; event.preventDefault(); return; }
+    if (hand) { startPan(event); return; }
+    if (currentTool === "text") { pendingTextPoint = safeScenePoint(event); return; }
     if (currentTool === "eraser") { eraserDragging = true; eraserLastPoint = safeScenePoint(event); collectEraserHits(eraserLastPoint, eraserLastPoint); return; }
     if (currentTool === "pencil") {
       const point = safeScenePoint(event); if (!point) return;
@@ -394,10 +484,7 @@
 
   canvas.on("mouse:move", opt => {
     const event = opt.e;
-    if (panning && panLast) {
-      const viewport = [...canvas.viewportTransform]; viewport[4] += event.clientX - panLast.x; viewport[5] += event.clientY - panLast.y;
-      panLast = { x: event.clientX, y: event.clientY }; canvas.setViewportTransform(core.clampViewport(viewport, canvas.getWidth(), canvas.getHeight(), workspaceBounds)); updateGrid(); canvas.requestRenderAll(); renderRemoteCursors(); return;
-    }
+    if (panning) { movePan(event); return; }
     const point = safeScenePoint(event); if (!point) return;
     if (connected && currentTool === "eraser" && eraserDragging) { collectEraserHits(eraserLastPoint, point); eraserLastPoint = point; }
     const now = performance.now();
@@ -407,12 +494,62 @@
       if (!last || Math.hypot(point.x-last.x,point.y-last.y) >= .8 / canvas.getZoom()) { draftPoints.push({x:point.x,y:point.y}); pendingPreviewPoints.push({x:point.x,y:point.y}); schedulePreviewSend(); }
     }
   });
-  canvas.on("mouse:up", () => finishInteraction());
+  canvas.on("mouse:up", () => {
+    const textPoint = pendingTextPoint;
+    pendingTextPoint = null;
+    finishInteraction();
+    if (textPoint && currentTool === "text" && !spacePressed) createTextDraft(textPoint);
+  });
+
+  function clientPoint(event) {
+    const source = event?.touches?.[0] || event?.changedTouches?.[0] || event;
+    const x = Number(source?.clientX), y = Number(source?.clientY);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  }
+
+  function startPan(event) {
+    const point = clientPoint(event);
+    if (!point) return recoverCoordinates();
+    pendingTextPoint = null;
+    panning = true;
+    panLast = point;
+    panPointerId = Number.isFinite(event?.pointerId) ? event.pointerId : null;
+    canvas.isDrawingMode = false;
+    canvas.defaultCursor = "grabbing";
+    if (panPointerId != null) canvas.upperCanvasEl?.setPointerCapture?.(panPointerId);
+    event.preventDefault?.();
+  }
+
+  function movePan(event) {
+    if (!panning || !panLast) return false;
+    if (panPointerId != null && event?.pointerId != null && event.pointerId !== panPointerId) return false;
+    const point = clientPoint(event);
+    if (!point) { recoverCoordinates(); return false; }
+    const dx = point.x - panLast.x, dy = point.y - panLast.y;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) { recoverCoordinates(); return false; }
+    if (dx || dy) {
+      const viewport = [...canvas.viewportTransform];
+      viewport[4] += dx; viewport[5] += dy;
+      panLast = point;
+      canvas.setViewportTransform(core.clampViewport(viewport, canvas.getWidth(), canvas.getHeight(), workspaceBounds));
+      updateGrid(); canvas.requestRenderAll(); renderRemoteCursors();
+    }
+    event.preventDefault?.();
+    return true;
+  }
+
+  canvas.upperCanvasEl?.addEventListener("pointermove", event => { if (panning) movePan(event); }, { passive: false });
+  window.addEventListener("pointerup", event => {
+    if (panning && (panPointerId == null || event.pointerId === panPointerId)) finishInteraction();
+  });
 
   function finishInteraction() {
     if (eraserDragging) commitEraser();
     eraserDragging = false; eraserLastPoint = null;
-    if (panning) { panning = false; panLast = null; applyTool(); }
+    if (panning) {
+      if (panPointerId != null && canvas.upperCanvasEl?.hasPointerCapture?.(panPointerId)) canvas.upperCanvasEl.releasePointerCapture(panPointerId);
+      panning = false; panLast = null; panPointerId = null; applyTool();
+    }
     flushPreview();
   }
 
@@ -434,14 +571,42 @@
   function flushPreview(){clearTimeout(previewTimer);previewTimer=null;if(!draftStrokeId||!pendingPreviewPoints.length)return;const points=core.simplifyPoints(pendingPreviewPoints.splice(0,50),.35);if(points.length)send({type:"stroke.points",strokeId:draftStrokeId,points});if(pendingPreviewPoints.length)schedulePreviewSend()}
 
   function createTextDraft(point) {
+    const editing = canvas.getActiveObject();
+    if (editing?.isEditing) return;
     const text = new fabric.IText("", { left:point.x,top:point.y,fontFamily:"Onest",fontSize,fill:brushColor,...commonObjectOptions("TEXT") });
-    text.__boardType="TEXT"; text.__draftText=true; canvas.add(text); canvas.setActiveObject(text); text.enterEditing(); text.hiddenTextarea?.focus(); canvas.requestRenderAll();
+    text.__boardType="TEXT"; text.__draftText=true; canvas.add(text); canvas.setActiveObject(text); text.enterEditing(); text.hiddenTextarea?.focus({ preventScroll:true }); canvas.requestRenderAll();
+    setTimeout(() => { if (text.isEditing) text.hiddenTextarea?.focus({ preventScroll:true }); }, 80);
   }
-  canvas.on("text:editing:entered", opt => { if (opt.target?.__boardId) opt.target.__textBefore=serializeObject(opt.target); });
-  canvas.on("text:editing:exited", opt => saveText(opt.target));
+  canvas.on("text:editing:entered", opt => {
+    const text = opt.target;
+    if (!text) return;
+    clearScheduledTextSave(text);
+    if (text.__boardId && !text.__textBefore) text.__textBefore=serializeObject(text);
+    refreshTextSizeControls();
+  });
+  canvas.on("text:editing:exited", opt => scheduleTextSave(opt.target));
+
+  function clearScheduledTextSave(text) {
+    const timer = textSaveTimers.get(text);
+    if (timer) clearTimeout(timer);
+    textSaveTimers.delete(text);
+  }
+
+  function scheduleTextSave(text, delay = 260) {
+    if (!text) return;
+    clearScheduledTextSave(text);
+    const timer = setTimeout(() => {
+      textSaveTimers.delete(text);
+      if (text.isEditing) return;
+      if (text.__fontControlActive) return scheduleTextSave(text, 180);
+      saveText(text);
+    }, delay);
+    textSaveTimers.set(text, timer);
+  }
 
   async function saveText(text) {
     if (!text || text.__savingText) return;
+    if (text.__fontControlActive) return scheduleTextSave(text, 180);
     text.__savingText=true;
     try {
       if (!text.text?.trim()) { if (text.__draftText) canvas.remove(text); return; }
@@ -450,10 +615,10 @@
       if(text.__draftText){const id=uuid();text.__boardId=id;text.__boardVersion=0;text.__draftText=false;objectIndex.set(id,text);const message=await runOperation({type:"text.commit",objectId:id,data});history.push({kind:"visibility",active:true,objects:[versionedView(message.object)]});}
       else{const before=text.__textBefore||serializeObject(text);const message=await runOperation({type:"object.update",objectId:text.__boardId,expectedVersion:text.__boardVersion,data});history.push({kind:"update",objectId:text.__boardId,before,after:data,version:message.object.version});}
       updateHistoryButtons();
-    }catch(error){showToast(error.message);await loadSnapshot();}finally{text.__savingText=false;text.__textBefore=null;applyTool()}
+    }catch(error){showToast(error.message);await loadSnapshot();}finally{text.__savingText=false;text.__textBefore=null;if(!text.isEditing)applyTool()}
   }
 
-  async function updateExistingTextSize(object,size){if(object.__savingText)return;const before=serializeObject(object);object.set({fontSize:size});object.setCoords();const after=serializeObject(object);try{const message=await runOperation({type:"object.update",objectId:object.__boardId,expectedVersion:object.__boardVersion,data:after});history.push({kind:"update",objectId:object.__boardId,before,after,version:message.object.version});updateHistoryButtons()}catch(error){showToast(error.message);await loadSnapshot()}}
+  async function updateExistingTextSize(object,before){if(object.__savingText||!object.__boardId)return;const after=serializeObject(object);if(JSON.stringify(before)===JSON.stringify(after))return;try{const message=await runOperation({type:"object.update",objectId:object.__boardId,expectedVersion:object.__boardVersion,data:after});history.push({kind:"update",objectId:object.__boardId,before,after,version:message.object.version});updateHistoryButtons()}catch(error){showToast(error.message);await loadSnapshot()}}
 
   canvas.on("before:transform", opt => {
     const target=opt.transform?.target||opt.target;if(!target)return;
@@ -461,7 +626,8 @@
   });
   canvas.on("selection:created", opt => configureSelection(opt.selected));
   canvas.on("selection:updated", opt => configureSelection(opt.selected));
-  function configureSelection(selected){const list=selected||[];if(list.length>1){const active=canvas.getActiveObject();if(active){active.lockScalingX=true;active.lockScalingY=true;active.lockRotation=true;active.setControlsVisibility?.({mt:false,mb:false,ml:false,mr:false,tl:false,tr:false,bl:false,br:false,mtr:false})}}}
+  canvas.on("selection:cleared", refreshTextSizeControls);
+  function configureSelection(selected){const list=selected||[];if(list.length>1){const active=canvas.getActiveObject();if(active){active.lockScalingX=true;active.lockScalingY=true;active.lockRotation=true;active.setControlsVisibility?.({mt:false,mb:false,ml:false,mr:false,tl:false,tr:false,bl:false,br:false,mtr:false})}}const text=list.find(item=>item.__boardType==="TEXT");if(text){const size=Math.round(Number(text.fontSize)||fontSize);fontSize=size;syncFontSizeInputs(size)}refreshTextSizeControls()}
   function activeObjects(target=canvas.getActiveObject()){return target?.getObjects?target.getObjects():target?[target]:[]}
   function versionedObject(object){return{id:object.__boardId,expectedVersion:Number(object.__boardVersion)||0}}
   function versionedView(item){return{id:item.id,expectedVersion:Number(item.version)||0}}
@@ -479,9 +645,22 @@
   });
 
   function serializeObject(object){
-    if(object.__boardType==="TEXT"||object.__draftText)return{text:object.text,left:object.left,top:object.top,fontSize:object.fontSize,fill:String(object.fill||brushColor).toUpperCase()};
+    if(object.__boardType==="TEXT"||object.__draftText)return{text:object.text,left:object.left,top:object.top,fontSize:object.fontSize,fill:String(object.fill||brushColor).toUpperCase(),styles:serializableTextStyles(object.styles)};
     if(object.__boardType==="IMAGE")return{left:object.left,top:object.top,width:object.width,height:object.height,scaleX:object.scaleX,scaleY:object.scaleY,angle:object.angle||0};
     const data=object.toObject(["path","stroke","strokeWidth","strokeLineCap","strokeLineJoin","left","top","scaleX","scaleY","angle","width","height"]);delete data.type;return data;
+  }
+
+  function serializableTextStyles(styles){
+    const result={};
+    Object.entries(styles||{}).forEach(([line,characters])=>{
+      const lineResult={};
+      Object.entries(characters||{}).forEach(([character,style])=>{
+        const size=Number(style?.fontSize);
+        if(Number.isFinite(size)&&size>=12&&size<=144)lineResult[character]={fontSize:size};
+      });
+      if(Object.keys(lineResult).length)result[line]=lineResult;
+    });
+    return result;
   }
 
   function collectEraserHits(from,to){if(!from||!to)return;const zoom=canvas.getZoom();const distance=Math.hypot(to.x-from.x,to.y-from.y);const steps=Math.max(1,Math.ceil(distance/Math.max(3/zoom,2)));for(let step=0;step<=steps;step++){const ratio=step/steps;const point=new fabric.Point(from.x+(to.x-from.x)*ratio,from.y+(to.y-from.y)*ratio);objectIndex.forEach(object=>{if(eraserObjects.has(object.__boardId)||!object.visible)return;const rect=object.getBoundingRect();const radius=14/zoom;if(point.x>=rect.left-radius&&point.x<=rect.left+rect.width+radius&&point.y>=rect.top-radius&&point.y<=rect.top+rect.height+radius){eraserObjects.set(object.__boardId,{object,opacity:object.opacity});object.set({opacity:.16,evented:false});}})}canvas.requestRenderAll()}
@@ -533,7 +712,11 @@
   document.getElementById("related-more")?.addEventListener("click",loadRelatedBoards);
   document.getElementById("board-name-form")?.addEventListener("submit",async event=>{event.preventDefault();const input=document.getElementById("board-name-input");const body=new URLSearchParams();body.set("name",input.value);try{const response=await fetch(`/api/boards/${boardId}/name`,{method:"POST",headers:{[csrfHeader]:csrfToken,"Content-Type":"application/x-www-form-urlencoded",Accept:"application/json"},body});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||"Не удалось сохранить название");setBoardName(result.displayName);showToast("Название сохранено",true)}catch(error){showToast(error.message)}});
 
-  function keyboardBlocked(){const active=canvas.getActiveObject();return active?.isEditing||document.activeElement?.matches?.("input,textarea,[contenteditable=true]")}
+  function keyboardBlocked(){
+    const active=canvas.getActiveObject();
+    if(active?.isEditing)return true;
+    return document.activeElement?.matches?.('textarea,[contenteditable=true],input:not([type="range"]):not([type="color"]):not([type="file"])')||false;
+  }
   document.addEventListener("keydown",event=>{if(keyboardBlocked())return;if(event.code==="Space"&&!spacePressed){event.preventDefault();spacePressed=true;previousTool=currentTool;applyTool();return}if((event.ctrlKey||event.metaKey)&&event.code==="KeyZ"){event.preventDefault();event.shiftKey?redo():undo();return}if(event.ctrlKey&&event.code==="KeyY"){event.preventDefault();redo();return}if(event.ctrlKey||event.metaKey)return;const tools={KeyP:"pencil",KeyV:"select",KeyE:"eraser",KeyT:"text",KeyH:"hand"};if(tools[event.code]){event.preventDefault();selectTool(tools[event.code]);return}if((event.code==="Delete"||event.code==="Backspace")&&currentTool==="select"){event.preventDefault();deleteSelection()}if(event.code==="Escape"){closeSidebar();closeMobileMore();canvas.discardActiveObject();canvas.requestRenderAll()}});
   document.addEventListener("keyup",event=>{if(event.code!=="Space")return;spacePressed=false;currentTool=previousTool;applyTool()});window.addEventListener("beforeunload",()=>socket?.close());
 
